@@ -155,15 +155,15 @@ export default function Dashboard() {
   const totalRoi = totalPubCost === 0 ? 0 : (totalProfit / totalPubCost) * 100;
 
   // Chart Data
-  const chartLabels = [...enhancedResult].reverse().map(item => item.ddate);
-  const costData = [...enhancedResult].reverse().map(item => item.publisherCost);
-  const profitData = [...enhancedResult].reverse().map(item => item.profit);
+  const chartLabels = enhancedResult.map(item => item.ddate);
+  const costData = enhancedResult.map(item => item.publisherCost);
+  const netRevenueData = enhancedResult.map(item => item.netRevenue);
 
   const lineChartData = {
     labels: chartLabels,
     datasets: [
       {
-        label: 'Publisher Cost ($)',
+        label: 'Pub Cost (B) ($)',
         data: costData,
         borderColor: '#6366f1',
         backgroundColor: 'rgba(99, 102, 241, 0.1)',
@@ -171,9 +171,9 @@ export default function Dashboard() {
         tension: 0.4,
       },
       {
-        label: 'Profit ($)',
-        data: profitData,
-        borderColor: '#10b981',
+        label: 'Net Revenue (E) ($)',
+        data: netRevenueData,
+        borderColor: '#a855f7',
         backgroundColor: 'rgba(168, 85, 247, 0.1)',
         fill: true,
         tension: 0.4,
