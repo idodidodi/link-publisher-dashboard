@@ -7,7 +7,7 @@ def load_token():
     try:
         with open('.env', 'r') as f:
             for line in f:
-                if line.startswith('TOKEN='):
+                if line.startswith('EXOCLICK_API_TOKEN='):
                     return line.split('=')[1].strip()
     except Exception as e:
         print(f"Error loading .env: {e}")

@@ -60,7 +60,7 @@ async function fetchStats(sessionToken: string) {
 }
 
 export async function GET() {
-    const apiToken = process.env.TOKEN;
+    const apiToken = process.env.EXOCLICK_API_TOKEN;
 
     if (!apiToken) {
         return NextResponse.json({ error: 'API Token not found in environment' }, { status: 500 });
