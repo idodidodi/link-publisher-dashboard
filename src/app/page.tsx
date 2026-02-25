@@ -24,7 +24,8 @@ import {
   AlertCircle,
   ArrowDownRight,
   ArrowUpRight,
-  Wallet
+  Wallet,
+  Settings2
 } from 'lucide-react';
 
 ChartJS.register(
@@ -58,10 +59,18 @@ interface StatsData {
   role: 'Advertiser' | 'Publisher';
 }
 
+const DEMO_DATA: Record<string, { b: number; c: number; d: number }> = {
+  '2026-02-11': { b: 316.6324, c: 188.1444969, d: 343.0874691 },
+  '2026-02-12': { b: 409.0804, c: 211.326337, d: 390.7748033 },
+  '2026-02-13': { b: 391.338, c: 205.2474423, d: 412.2200933 },
+  '2026-02-14': { b: 351.2901, c: 228.8147848, d: 368.3482055 },
+};
+
 export default function Dashboard() {
   const [stats, setStats] = useState<StatsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isDemoMode, setIsDemoMode] = useState(true);
 
   useEffect(() => {
     async function fetchData() {
@@ -112,13 +121,16 @@ export default function Dashboard() {
     );
   }
 
-  const { result, resultTotal } = stats.data;
+  const { result } = stats.data;
 
   // Calculate enhanced metrics for each row
   const enhancedResult = result.map(item => {
-    const publisherCost = item.cost || item.revenue || item.value || 0;
-    const topsRevenue = 0; // Unknown (C)
-    const blastRevenue = 0; // Unknown (D)
+    const isDemoAvailable = isDemoMode && DEMO_DATA[item.ddate];
+
+    const publisherCost = isDemoAvailable ? DEMO_DATA[item.ddate].b : (item.cost || item.revenue || item.value || 0);
+    const topsRevenue = isDemoAvailable ? DEMO_DATA[item.ddate].c : 0;
+    const blastRevenue = isDemoAvailable ? DEMO_DATA[item.ddate].d : 0;
+
     const netRevenue = topsRevenue + blastRevenue; // E
     const profit = netRevenue - publisherCost; // F
     const roi = publisherCost === 0 ? 0 : (profit / publisherCost); // G
@@ -194,8 +206,29 @@ export default function Dashboard() {
     <div className="dashboard-container">
       <header className="header" style={{ marginBottom: '2rem' }}>
         <div>
-          <h1>Link Publisher Dashboard</h1>
-          <p style={{ color: 'var(--text-dim)', fontSize: '0.875rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+            <h1>Link Publisher Dashboard</h1>
+            <label style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.5rem',
+              background: 'rgba(255,255,255,0.05)',
+              padding: '0.4rem 0.8rem',
+              borderRadius: '2rem',
+              cursor: 'pointer',
+              fontSize: '0.875rem',
+              border: '1px solid var(--border)'
+            }}>
+              <input
+                type="checkbox"
+                checked={isDemoMode}
+                onChange={() => setIsDemoMode(!isDemoMode)}
+              />
+              <Settings2 size={14} />
+              Demo Data
+            </label>
+          </div>
+          <p style={{ color: 'var(--text-dim)', fontSize: '0.875rem', marginTop: '4px' }}>
             <Calendar size={14} style={{ display: 'inline', verticalAlign: 'middle', marginRight: '4px' }} />
             Performance Tracking • {stats.role} Account
           </p>
@@ -266,9 +299,13 @@ export default function Dashboard() {
               {enhancedResult.map((item, idx) => (
                 <tr key={idx}>
                   <td style={{ textAlign: 'left' }}>{item.ddate}</td>
-                  <td style={{ fontWeight: 500 }}>${item.publisherCost.toFixed(2)}</td>
-                  <td style={{ color: 'var(--text-dim)' }}>$0.00</td>
-                  <td style={{ color: 'var(--text-dim)' }}>$0.00</td>
+                  <td style={{ fontWeight: 500 }}>${item.publisherCost.toFixed(4)}</td>
+                  <td style={{ color: item.topsRevenue > 0 ? 'inherit' : 'var(--text-dim)' }}>
+                    ${item.topsRevenue.toFixed(2)}
+                  </td>
+                  <td style={{ color: item.blastRevenue > 0 ? 'inherit' : 'var(--text-dim)' }}>
+                    ${item.blastRevenue.toFixed(2)}
+                  </td>
                   <td>${item.netRevenue.toFixed(2)}</td>
                   <td style={{ fontWeight: 600, color: item.profit >= 0 ? 'var(--success)' : 'var(--error)' }}>
                     ${item.profit.toFixed(2)}
@@ -283,8 +320,8 @@ export default function Dashboard() {
               <tr style={{ borderTop: '2px solid var(--border)', background: 'rgba(255,255,255,0.02)' }}>
                 <td style={{ textAlign: 'left', fontWeight: 'bold' }}>TOTAL</td>
                 <td style={{ fontWeight: 'bold' }}>${totalPubCost.toFixed(2)}</td>
-                <td style={{ fontWeight: 'bold' }}>$0.00</td>
-                <td style={{ fontWeight: 'bold' }}>$0.00</td>
+                <td style={{ fontWeight: 'bold' }}>${totalTopsRev.toFixed(2)}</td>
+                <td style={{ fontWeight: 'bold' }}>${totalBlastRev.toFixed(2)}</td>
                 <td style={{ fontWeight: 'bold' }}>${totalNetRev.toFixed(2)}</td>
                 <td style={{ fontWeight: 'bold', color: totalProfit >= 0 ? 'var(--success)' : 'var(--error)' }}>
                   ${totalProfit.toFixed(2)}
@@ -300,4 +337,3 @@ export default function Dashboard() {
     </div>
   );
 }
-
