@@ -21,7 +21,10 @@ import {
   DollarSign,
   LayoutDashboard,
   Calendar,
-  AlertCircle
+  AlertCircle,
+  ArrowDownRight,
+  ArrowUpRight,
+  Wallet
 } from 'lucide-react';
 
 ChartJS.register(
@@ -110,40 +113,58 @@ export default function Dashboard() {
   }
 
   const { result, resultTotal } = stats.data;
-  const isAdvertiser = stats.role === 'Advertiser';
-  const valKey = isAdvertiser ? 'cost' : 'revenue';
 
-  // Defensive values for totals
-  const totalImpressions = resultTotal?.impressions || 0;
-  const totalClicks = resultTotal?.clicks || 0;
-  const totalCtr = resultTotal?.ctr || 0;
-  const totalValue = resultTotal?.revenue || resultTotal?.cost || resultTotal?.value || 0;
+  // Calculate enhanced metrics for each row
+  const enhancedResult = result.map(item => {
+    const publisherCost = item.cost || item.revenue || item.value || 0;
+    const topsRevenue = 0; // Unknown (C)
+    const blastRevenue = 0; // Unknown (D)
+    const netRevenue = topsRevenue + blastRevenue; // E
+    const profit = netRevenue - publisherCost; // F
+    const roi = publisherCost === 0 ? 0 : (profit / publisherCost); // G
+
+    return {
+      ...item,
+      publisherCost,
+      topsRevenue,
+      blastRevenue,
+      netRevenue,
+      profit,
+      roi: roi * 100 // Convert to percentage
+    };
+  });
+
+  // Calculate enhanced totals
+  const totalPubCost = enhancedResult.reduce((sum, item) => sum + item.publisherCost, 0);
+  const totalTopsRev = enhancedResult.reduce((sum, item) => sum + item.topsRevenue, 0);
+  const totalBlastRev = enhancedResult.reduce((sum, item) => sum + item.blastRevenue, 0);
+  const totalNetRev = totalTopsRev + totalBlastRev;
+  const totalProfit = totalNetRev - totalPubCost;
+  const totalRoi = totalPubCost === 0 ? 0 : (totalProfit / totalPubCost) * 100;
 
   // Chart Data
-  const chartLabels = [...result].reverse().map(item => item.ddate);
-  const impressionsData = [...result].reverse().map(item => item.impressions);
-  const valueData = [...result].reverse().map(item => item.revenue || item.cost || item.value || 0);
+  const chartLabels = [...enhancedResult].reverse().map(item => item.ddate);
+  const costData = [...enhancedResult].reverse().map(item => item.publisherCost);
+  const profitData = [...enhancedResult].reverse().map(item => item.profit);
 
   const lineChartData = {
     labels: chartLabels,
     datasets: [
       {
-        label: 'Impressions',
-        data: impressionsData,
+        label: 'Publisher Cost ($)',
+        data: costData,
         borderColor: '#6366f1',
         backgroundColor: 'rgba(99, 102, 241, 0.1)',
         fill: true,
         tension: 0.4,
-        yAxisID: 'y',
       },
       {
-        label: isAdvertiser ? 'Cost ($)' : 'Revenue ($)',
-        data: valueData,
-        borderColor: '#a855f7',
+        label: 'Profit ($)',
+        data: profitData,
+        borderColor: '#10b981',
         backgroundColor: 'rgba(168, 85, 247, 0.1)',
         fill: true,
         tension: 0.4,
-        yAxisID: 'y1',
       }
     ],
   };
@@ -159,17 +180,7 @@ export default function Dashboard() {
     },
     scales: {
       y: {
-        type: 'linear' as const,
-        display: true,
-        position: 'left' as const,
         grid: { color: 'rgba(255, 255, 255, 0.05)' },
-        ticks: { color: '#94a3b8' }
-      },
-      y1: {
-        type: 'linear' as const,
-        display: true,
-        position: 'right' as const,
-        grid: { drawOnChartArea: false },
         ticks: { color: '#94a3b8' }
       },
       x: {
@@ -181,12 +192,12 @@ export default function Dashboard() {
 
   return (
     <div className="dashboard-container">
-      <header className="header">
+      <header className="header" style={{ marginBottom: '2rem' }}>
         <div>
-          <h1>ExoClick Dashboard</h1>
+          <h1>Link Publisher Dashboard</h1>
           <p style={{ color: 'var(--text-dim)', fontSize: '0.875rem' }}>
             <Calendar size={14} style={{ display: 'inline', verticalAlign: 'middle', marginRight: '4px' }} />
-            Last 14 Days • {stats.role} Account
+            Performance Tracking • {stats.role} Account
           </p>
         </div>
         <LayoutDashboard size={32} color="var(--accent)" />
@@ -195,37 +206,41 @@ export default function Dashboard() {
       <div className="summary-grid">
         <div className="stat-card">
           <div className="stat-label">
-            <Eye size={18} color="var(--accent)" />
-            Total Impressions
-          </div>
-          <div className="stat-value">{totalImpressions.toLocaleString()}</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-label">
-            <MousePointer2 size={18} color="var(--accent-secondary)" />
-            Total Clicks
-          </div>
-          <div className="stat-value">{totalClicks.toLocaleString()}</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-label">
-            <TrendingUp size={18} color="var(--success)" />
-            Avg. CTR
-          </div>
-          <div className="stat-value">{totalCtr.toFixed(3)}%</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-label">
             <DollarSign size={18} color="var(--accent)" />
-            Total {isAdvertiser ? 'Cost' : 'Revenue'}
+            Total Cost (B)
           </div>
-          <div className="stat-value">${totalValue.toFixed(2)}</div>
+          <div className="stat-value">${totalPubCost.toFixed(2)}</div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-label">
+            <Wallet size={18} color="var(--accent-secondary)" />
+            Net Revenue (E)
+          </div>
+          <div className="stat-value">${totalNetRev.toFixed(2)}</div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-label">
+            {totalProfit >= 0 ? <ArrowUpRight size={18} color="var(--success)" /> : <ArrowDownRight size={18} color="var(--error)" />}
+            Total Profit (F)
+          </div>
+          <div className="stat-value" style={{ color: totalProfit >= 0 ? 'var(--success)' : 'var(--error)' }}>
+            ${totalProfit.toFixed(2)}
+          </div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-label">
+            <TrendingUp size={18} color="var(--accent)" />
+            Overall ROI (G)
+          </div>
+          <div className="stat-value" style={{ color: totalRoi >= 0 ? 'var(--success)' : 'var(--error)' }}>
+            {totalRoi.toFixed(1)}%
+          </div>
         </div>
       </div>
 
       <div className="chart-section">
         <div className="chart-header">
-          <h2 style={{ fontSize: '1.25rem' }}>Performance Trends</h2>
+          <h2 style={{ fontSize: '1.25rem' }}>Profit vs Cost Trends</h2>
         </div>
         <div className="chart-container">
           <Line options={chartOptions as any} data={lineChartData} />
@@ -233,32 +248,56 @@ export default function Dashboard() {
       </div>
 
       <div className="table-section">
-        <h2 style={{ fontSize: '1.25rem', marginBottom: '1rem' }}>Daily Breakdown</h2>
-        <table>
-          <thead>
-            <tr>
-              <th>Date</th>
-              <th>Impressions</th>
-              <th>Clicks</th>
-              <th>CTR</th>
-              <th>{isAdvertiser ? 'Cost' : 'Revenue'}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {result.map((item, idx) => (
-              <tr key={idx}>
-                <td>{item.ddate}</td>
-                <td>{item.impressions.toLocaleString()}</td>
-                <td>{item.clicks.toLocaleString()}</td>
-                <td>{item.ctr.toFixed(3)}%</td>
-                <td style={{ fontWeight: 600, color: 'var(--foreground)' }}>
-                  ${(item.revenue || item.cost || item.value || 0).toFixed(2)}
+        <h2 style={{ fontSize: '1.25rem', marginBottom: '1rem' }}>Daily Performance Breakdown</h2>
+        <div style={{ overflowX: 'auto' }}>
+          <table>
+            <thead>
+              <tr>
+                <th style={{ textAlign: 'left' }}>Date (A)</th>
+                <th>Pub Cost (B)</th>
+                <th>Tops Rev (C)</th>
+                <th>Blast Rev (D)</th>
+                <th>Net Rev (E)</th>
+                <th>Profit (F)</th>
+                <th>ROI (G)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {enhancedResult.map((item, idx) => (
+                <tr key={idx}>
+                  <td style={{ textAlign: 'left' }}>{item.ddate}</td>
+                  <td style={{ fontWeight: 500 }}>${item.publisherCost.toFixed(2)}</td>
+                  <td style={{ color: 'var(--text-dim)' }}>$0.00</td>
+                  <td style={{ color: 'var(--text-dim)' }}>$0.00</td>
+                  <td>${item.netRevenue.toFixed(2)}</td>
+                  <td style={{ fontWeight: 600, color: item.profit >= 0 ? 'var(--success)' : 'var(--error)' }}>
+                    ${item.profit.toFixed(2)}
+                  </td>
+                  <td style={{ fontWeight: 600, color: item.roi >= 0 ? 'var(--success)' : 'var(--error)' }}>
+                    {item.roi.toFixed(0)}%
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr style={{ borderTop: '2px solid var(--border)', background: 'rgba(255,255,255,0.02)' }}>
+                <td style={{ textAlign: 'left', fontWeight: 'bold' }}>TOTAL</td>
+                <td style={{ fontWeight: 'bold' }}>${totalPubCost.toFixed(2)}</td>
+                <td style={{ fontWeight: 'bold' }}>$0.00</td>
+                <td style={{ fontWeight: 'bold' }}>$0.00</td>
+                <td style={{ fontWeight: 'bold' }}>${totalNetRev.toFixed(2)}</td>
+                <td style={{ fontWeight: 'bold', color: totalProfit >= 0 ? 'var(--success)' : 'var(--error)' }}>
+                  ${totalProfit.toFixed(2)}
+                </td>
+                <td style={{ fontWeight: 'bold', color: totalRoi >= 0 ? 'var(--success)' : 'var(--error)' }}>
+                  {totalRoi.toFixed(0)}%
                 </td>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </tfoot>
+          </table>
+        </div>
       </div>
     </div>
   );
 }
+
