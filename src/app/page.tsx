@@ -271,15 +271,6 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <div className="chart-section">
-        <div className="chart-header">
-          <h2 style={{ fontSize: '1.25rem' }}>Profit vs Cost Trends</h2>
-        </div>
-        <div className="chart-container">
-          <Line options={chartOptions as any} data={lineChartData} />
-        </div>
-      </div>
-
       <div className="table-section">
         <h2 style={{ fontSize: '1.25rem', marginBottom: '1rem' }}>Daily Performance Breakdown</h2>
         <div style={{ overflowX: 'auto' }}>
@@ -332,6 +323,15 @@ export default function Dashboard() {
               </tr>
             </tfoot>
           </table>
+        </div>
+      </div>
+
+      <div className="chart-section">
+        <div className="chart-header">
+          <h2 style={{ fontSize: '1.25rem' }}>Profit vs Cost Trends</h2>
+        </div>
+        <div className="chart-container">
+          <Line options={chartOptions as any} data={lineChartData} />
         </div>
       </div>
     </div>
