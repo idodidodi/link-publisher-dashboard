@@ -60,18 +60,13 @@ interface StatsData {
   role: 'Advertiser' | 'Publisher';
 }
 
-const DEMO_DATA: Record<string, { b: number; c: number; d: number }> = {
-  '2026-02-11': { b: 316.6324, c: 188.1444969, d: 343.0874691 },
-  '2026-02-12': { b: 409.0804, c: 211.326337, d: 390.7748033 },
-  '2026-02-13': { b: 391.338, c: 205.2474423, d: 412.2200933 },
-  '2026-02-14': { b: 351.2901, c: 228.8147848, d: 368.3482055 },
-};
+
 
 export default function Dashboard() {
   const [stats, setStats] = useState<StatsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [isDemoMode, setIsDemoMode] = useState(true);
+
 
   useEffect(() => {
     async function fetchData() {
@@ -126,11 +121,9 @@ export default function Dashboard() {
 
   // Calculate enhanced metrics for each row
   const enhancedResult = result.map(item => {
-    const isDemoAvailable = isDemoMode && DEMO_DATA[item.ddate];
-
-    const publisherCost = isDemoAvailable ? DEMO_DATA[item.ddate].b : (item.cost || item.revenue || item.value || 0);
+    const publisherCost = item.cost || item.revenue || item.value || 0;
     const topsRevenue = 0; // Column C is no longer used
-    const blastRevenue = isDemoAvailable ? DEMO_DATA[item.ddate].d : (item.blastRevenue || 0);
+    const blastRevenue = item.blastRevenue || 0;
 
     const netRevenue = topsRevenue + blastRevenue; // E
     const profit = netRevenue - publisherCost; // F
@@ -209,25 +202,7 @@ export default function Dashboard() {
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
             <h1>Link Publisher Dashboard</h1>
-            <label style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.5rem',
-              background: 'rgba(255,255,255,0.05)',
-              padding: '0.4rem 0.8rem',
-              borderRadius: '2rem',
-              cursor: 'pointer',
-              fontSize: '0.875rem',
-              border: '1px solid var(--border)'
-            }}>
-              <input
-                type="checkbox"
-                checked={isDemoMode}
-                onChange={() => setIsDemoMode(!isDemoMode)}
-              />
-              <Settings2 size={14} />
-              Demo Data
-            </label>
+
           </div>
           <p style={{ color: 'var(--text-dim)', fontSize: '0.875rem', marginTop: '4px' }}>
             <Calendar size={14} style={{ display: 'inline', verticalAlign: 'middle', marginRight: '4px' }} />
