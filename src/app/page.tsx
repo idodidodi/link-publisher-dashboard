@@ -25,7 +25,8 @@ import {
   ArrowDownRight,
   ArrowUpRight,
   Wallet,
-  Settings2
+  Settings2,
+  X
 } from 'lucide-react';
 
 ChartJS.register(
@@ -67,22 +68,28 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Default to last 14 days
-  const [startDate, setStartDate] = useState(() => {
+  // Applied dates (used for fetching)
+  const [appliedFrom, setAppliedFrom] = useState(() => {
     const d = new Date();
     d.setDate(d.getDate() - 14);
     return d.toISOString().split('T')[0];
   });
-  const [endDate, setEndDate] = useState(() => {
+  const [appliedTo, setAppliedTo] = useState(() => {
     return new Date().toISOString().split('T')[0];
   });
+
+  // Modal & Selection States
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [pendingFrom, setPendingFrom] = useState(appliedFrom);
+  const [pendingTo, setPendingTo] = useState(appliedTo);
+  const [validationError, setValidationError] = useState<string | null>(null);
 
 
   useEffect(() => {
     async function fetchData() {
       setLoading(true);
       try {
-        const response = await fetch(`/api/stats?from=${startDate}&to=${endDate}`);
+        const response = await fetch(`/api/stats?from=${appliedFrom}&to=${appliedTo}`);
         if (!response.ok) throw new Error('Failed to fetch stats');
         const data = await response.json();
         setStats(data);
@@ -93,7 +100,30 @@ export default function Dashboard() {
       }
     }
     fetchData();
-  }, [startDate, endDate]);
+  }, [appliedFrom, appliedTo]);
+
+  const handleApplyDates = () => {
+    if (!pendingFrom || !pendingTo) {
+      setValidationError('Please select both start and end dates.');
+      return;
+    }
+    if (new Date(pendingFrom) > new Date(pendingTo)) {
+      setValidationError('Start date cannot be after end date.');
+      return;
+    }
+
+    setValidationError(null);
+    setAppliedFrom(pendingFrom);
+    setAppliedTo(pendingTo);
+    setIsModalOpen(false);
+  };
+
+  const openModal = () => {
+    setPendingFrom(appliedFrom);
+    setPendingTo(appliedTo);
+    setValidationError(null);
+    setIsModalOpen(true);
+  };
 
   if (loading) {
     return (
@@ -220,52 +250,175 @@ export default function Dashboard() {
           </p>
         </div>
 
-        <div className="date-filter-container" style={{
+        <button
+          onClick={openModal}
+          className="date-filter-trigger"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.75rem',
+            padding: '0.6rem 1.25rem',
+            background: 'rgba(255, 255, 255, 0.05)',
+            backdropFilter: 'blur(10px)',
+            borderRadius: '0.75rem',
+            border: '1px solid rgba(255, 255, 255, 0.1)',
+            color: 'white',
+            cursor: 'pointer',
+            transition: 'all 0.2s ease',
+            boxShadow: '0 4px 15px rgba(0, 0, 0, 0.1)'
+          }}
+        >
+          <Calendar size={18} color="var(--accent)" />
+          <span style={{ fontSize: '0.9rem', fontWeight: 500 }}>
+            {appliedFrom} — {appliedTo}
+          </span>
+        </button>
+      </header>
+
+      {/* Date Selection Modal */}
+      {isModalOpen && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0, 0, 0, 0.7)',
+          backdropFilter: 'blur(4px)',
           display: 'flex',
           alignItems: 'center',
-          gap: '0.75rem',
-          padding: '0.5rem 1rem',
-          background: 'rgba(255, 255, 255, 0.03)',
-          backdropFilter: 'blur(10px)',
-          borderRadius: '1rem',
-          border: '1px solid rgba(255, 255, 255, 0.05)',
-          boxShadow: '0 4px 15px rgba(0, 0, 0, 0.1)'
+          justifyContent: 'center',
+          zIndex: 1000,
+          padding: '1rem'
         }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-            <label style={{ fontSize: '0.7rem', color: 'var(--text-dim)', fontWeight: 500 }}>FROM</label>
-            <input
-              type="date"
-              value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-              style={{
-                background: 'transparent',
-                border: 'none',
-                color: 'white',
-                fontSize: '0.875rem',
-                outline: 'none',
-                cursor: 'pointer'
-              }}
-            />
-          </div>
-          <div style={{ width: '1px', height: '20px', background: 'rgba(255, 255, 255, 0.1)' }}></div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-            <label style={{ fontSize: '0.7rem', color: 'var(--text-dim)', fontWeight: 500 }}>TO</label>
-            <input
-              type="date"
-              value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
-              style={{
-                background: 'transparent',
-                border: 'none',
-                color: 'white',
-                fontSize: '0.875rem',
-                outline: 'none',
-                cursor: 'pointer'
-              }}
-            />
+          <div style={{
+            background: '#1e1e2d',
+            width: '100%',
+            maxWidth: '400px',
+            borderRadius: '1.25rem',
+            border: '1px solid rgba(255, 255, 255, 0.1)',
+            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
+            overflow: 'hidden',
+            display: 'flex',
+            flexDirection: 'column'
+          }}>
+            <div style={{
+              padding: '1.25rem',
+              borderBottom: '1px solid rgba(255, 255, 255, 0.05)',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center'
+            }}>
+              <h3 style={{ margin: 0, fontSize: '1.1rem' }}>Select Custom Dates</h3>
+              <button
+                onClick={() => setIsModalOpen(false)}
+                style={{ background: 'transparent', border: 'none', color: 'var(--text-dim)', cursor: 'pointer', padding: '4px' }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                <label style={{ fontSize: '0.75rem', color: 'var(--text-dim)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  Start Date
+                </label>
+                <input
+                  type="date"
+                  value={pendingFrom}
+                  onChange={(e) => setPendingFrom(e.target.value)}
+                  style={{
+                    background: 'rgba(255, 255, 255, 0.05)',
+                    border: '1px solid rgba(255, 255, 255, 0.1)',
+                    borderRadius: '0.5rem',
+                    padding: '0.75rem',
+                    color: 'white',
+                    fontSize: '1rem',
+                    outline: 'none',
+                    width: '100%'
+                  }}
+                />
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                <label style={{ fontSize: '0.75rem', color: 'var(--text-dim)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  End Date
+                </label>
+                <input
+                  type="date"
+                  value={pendingTo}
+                  onChange={(e) => setPendingTo(e.target.value)}
+                  style={{
+                    background: 'rgba(255, 255, 255, 0.05)',
+                    border: '1px solid rgba(255, 255, 255, 0.1)',
+                    borderRadius: '0.5rem',
+                    padding: '0.75rem',
+                    color: 'white',
+                    fontSize: '1rem',
+                    outline: 'none',
+                    width: '100%'
+                  }}
+                />
+              </div>
+
+              {validationError && (
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem',
+                  padding: '0.75rem',
+                  background: 'rgba(239, 68, 68, 0.1)',
+                  borderRadius: '0.5rem',
+                  color: '#ef4444',
+                  fontSize: '0.85rem'
+                }}>
+                  <AlertCircle size={16} />
+                  {validationError}
+                </div>
+              )}
+            </div>
+
+            <div style={{
+              padding: '1.25rem',
+              background: 'rgba(255, 255, 255, 0.02)',
+              display: 'flex',
+              gap: '1rem'
+            }}>
+              <button
+                onClick={() => setIsModalOpen(false)}
+                style={{
+                  flex: 1,
+                  padding: '0.75rem',
+                  borderRadius: '0.5rem',
+                  border: '1px solid rgba(255, 255, 255, 0.1)',
+                  background: 'transparent',
+                  color: 'white',
+                  cursor: 'pointer',
+                  fontWeight: 500
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleApplyDates}
+                style={{
+                  flex: 1,
+                  padding: '0.75rem',
+                  borderRadius: '0.5rem',
+                  border: 'none',
+                  background: 'var(--accent)',
+                  color: 'white',
+                  cursor: 'pointer',
+                  fontWeight: 600,
+                  boxShadow: '0 4px 12px rgba(99, 102, 241, 0.3)'
+                }}
+              >
+                Apply Dates
+              </button>
+            </div>
           </div>
         </div>
-      </header>
+      )}
 
       <div className="summary-grid">
         <div className="stat-card">
