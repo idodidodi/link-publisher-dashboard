@@ -47,6 +47,7 @@ interface StatItem {
   revenue?: number;
   cost?: number;
   value?: number;
+  blastRevenue?: number;
   ctr: number;
   cpm: number;
 }
@@ -128,8 +129,8 @@ export default function Dashboard() {
     const isDemoAvailable = isDemoMode && DEMO_DATA[item.ddate];
 
     const publisherCost = isDemoAvailable ? DEMO_DATA[item.ddate].b : (item.cost || item.revenue || item.value || 0);
-    const topsRevenue = isDemoAvailable ? DEMO_DATA[item.ddate].c : 0;
-    const blastRevenue = isDemoAvailable ? DEMO_DATA[item.ddate].d : 0;
+    const topsRevenue = 0; // Column C is no longer used
+    const blastRevenue = isDemoAvailable ? DEMO_DATA[item.ddate].d : (item.blastRevenue || 0);
 
     const netRevenue = topsRevenue + blastRevenue; // E
     const profit = netRevenue - publisherCost; // F
@@ -249,7 +250,7 @@ export default function Dashboard() {
             <Wallet size={18} color="var(--accent-secondary)" />
             Net Revenue (E)
           </div>
-          <div className="stat-value">{isDemoMode ? 'N/A' : `$${totalNetRev.toFixed(2)}`}</div>
+          <div className="stat-value">${totalNetRev.toFixed(2)}</div>
         </div>
         <div className="stat-card">
           <div className="stat-label">
@@ -257,7 +258,7 @@ export default function Dashboard() {
             Total Profit (F)
           </div>
           <div className="stat-value" style={{ color: totalProfit >= 0 ? 'var(--success)' : 'var(--error)' }}>
-            {isDemoMode ? 'N/A' : `$${totalProfit.toFixed(2)}`}
+            ${totalProfit.toFixed(2)}
           </div>
         </div>
         <div className="stat-card">
@@ -266,7 +267,7 @@ export default function Dashboard() {
             Overall ROI (G)
           </div>
           <div className="stat-value" style={{ color: totalRoi >= 0 ? 'var(--success)' : 'var(--error)' }}>
-            {isDemoMode ? 'N/A' : `${totalRoi.toFixed(1)}%`}
+            {totalRoi.toFixed(1)}%
           </div>
         </div>
       </div>
@@ -299,10 +300,10 @@ export default function Dashboard() {
                   </td>
                   <td>${item.netRevenue.toFixed(2)}</td>
                   <td style={{ fontWeight: 600, color: item.profit >= 0 ? 'var(--success)' : 'var(--error)' }}>
-                    {isDemoMode && item.netRevenue === 0 ? 'N/A' : `$${item.profit.toFixed(2)}`}
+                    ${item.profit.toFixed(2)}
                   </td>
                   <td style={{ fontWeight: 600, color: item.roi >= 0 ? 'var(--success)' : 'var(--error)' }}>
-                    {isDemoMode && item.netRevenue === 0 ? 'N/A' : `${item.roi.toFixed(0)}%`}
+                    {item.roi.toFixed(0)}%
                   </td>
                 </tr>
               ))}
@@ -311,14 +312,14 @@ export default function Dashboard() {
               <tr style={{ borderTop: '2px solid var(--border)', background: 'rgba(255,255,255,0.02)' }}>
                 <td style={{ textAlign: 'left', fontWeight: 'bold' }}>TOTAL</td>
                 <td style={{ fontWeight: 'bold' }}>${totalPubCost.toFixed(2)}</td>
-                <td style={{ fontWeight: 'bold' }}>${isDemoMode ? 'N/A' : `$${totalTopsRev.toFixed(2)}`}</td>
-                <td style={{ fontWeight: 'bold' }}>${isDemoMode ? 'N/A' : `$${totalBlastRev.toFixed(2)}`}</td>
-                <td style={{ fontWeight: 'bold' }}>{isDemoMode ? 'N/A' : `$${totalNetRev.toFixed(2)}`}</td>
+                <td style={{ fontWeight: 'bold' }}>${totalTopsRev.toFixed(2)}</td>
+                <td style={{ fontWeight: 'bold' }}>${totalBlastRev.toFixed(2)}</td>
+                <td style={{ fontWeight: 'bold' }}>${totalNetRev.toFixed(2)}</td>
                 <td style={{ fontWeight: 'bold', color: totalProfit >= 0 ? 'var(--success)' : 'var(--error)' }}>
-                  {isDemoMode ? 'N/A' : `$${totalProfit.toFixed(2)}`}
+                  ${totalProfit.toFixed(2)}
                 </td>
                 <td style={{ fontWeight: 'bold', color: totalRoi >= 0 ? 'var(--success)' : 'var(--error)' }}>
-                  {isDemoMode ? 'N/A' : `${totalRoi.toFixed(0)}%`}
+                  {totalRoi.toFixed(0)}%
                 </td>
               </tr>
             </tfoot>
