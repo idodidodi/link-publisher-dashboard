@@ -67,11 +67,22 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Default to last 14 days
+  const [startDate, setStartDate] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 14);
+    return d.toISOString().split('T')[0];
+  });
+  const [endDate, setEndDate] = useState(() => {
+    return new Date().toISOString().split('T')[0];
+  });
+
 
   useEffect(() => {
     async function fetchData() {
+      setLoading(true);
       try {
-        const response = await fetch('/api/stats');
+        const response = await fetch(`/api/stats?from=${startDate}&to=${endDate}`);
         if (!response.ok) throw new Error('Failed to fetch stats');
         const data = await response.json();
         setStats(data);
@@ -82,7 +93,7 @@ export default function Dashboard() {
       }
     }
     fetchData();
-  }, []);
+  }, [startDate, endDate]);
 
   if (loading) {
     return (
@@ -198,18 +209,62 @@ export default function Dashboard() {
 
   return (
     <div className="dashboard-container">
-      <header className="header" style={{ marginBottom: '2rem' }}>
-        <div>
+      <header className="header" style={{ marginBottom: '2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div style={{ flex: 1 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
             <h1>Link Publisher Dashboard</h1>
-
           </div>
           <p style={{ color: 'var(--text-dim)', fontSize: '0.875rem', marginTop: '4px' }}>
             <Calendar size={14} style={{ display: 'inline', verticalAlign: 'middle', marginRight: '4px' }} />
             Performance Tracking • {stats.role} Account
           </p>
         </div>
-        <LayoutDashboard size={32} color="var(--accent)" />
+
+        <div className="date-filter-container" style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '0.75rem',
+          padding: '0.5rem 1rem',
+          background: 'rgba(255, 255, 255, 0.03)',
+          backdropFilter: 'blur(10px)',
+          borderRadius: '1rem',
+          border: '1px solid rgba(255, 255, 255, 0.05)',
+          boxShadow: '0 4px 15px rgba(0, 0, 0, 0.1)'
+        }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+            <label style={{ fontSize: '0.7rem', color: 'var(--text-dim)', fontWeight: 500 }}>FROM</label>
+            <input
+              type="date"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: 'white',
+                fontSize: '0.875rem',
+                outline: 'none',
+                cursor: 'pointer'
+              }}
+            />
+          </div>
+          <div style={{ width: '1px', height: '20px', background: 'rgba(255, 255, 255, 0.1)' }}></div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+            <label style={{ fontSize: '0.7rem', color: 'var(--text-dim)', fontWeight: 500 }}>TO</label>
+            <input
+              type="date"
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: 'white',
+                fontSize: '0.875rem',
+                outline: 'none',
+                cursor: 'pointer'
+              }}
+            />
+          </div>
+        </div>
       </header>
 
       <div className="summary-grid">

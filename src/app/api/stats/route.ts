@@ -19,17 +19,11 @@ async function getSessionToken(apiToken: string) {
     return data.token;
 }
 
-async function fetchStats(sessionToken: string) {
+async function fetchStats(sessionToken: string, dateFrom: string, dateTo: string) {
     const headers = {
         'Authorization': `Bearer ${sessionToken}`,
         'Content-Type': 'application/json',
     };
-
-    const now = new Date();
-    const dateTo = now.toISOString().split('T')[0];
-    const dateFromDate = new Date();
-    dateFromDate.setDate(now.getDate() - 14);
-    const dateFrom = dateFromDate.toISOString().split('T')[0];
 
     const params = new URLSearchParams({
         'date-from': dateFrom,
@@ -98,7 +92,11 @@ async function fetchBlastStats(dateFrom: string, dateTo: string) {
     }
 }
 
-export async function GET() {
+export async function GET(request: Request) {
+    const { searchParams } = new URL(request.url);
+    const from = searchParams.get('from');
+    const to = searchParams.get('to');
+
     const apiToken = process.env.EXOCLICK_API_TOKEN;
 
     if (!apiToken) {
@@ -111,13 +109,16 @@ export async function GET() {
     }
 
     const now = new Date();
-    const dateTo = now.toISOString().split('T')[0];
+    const defaultDateTo = now.toISOString().split('T')[0];
     const dateFromDate = new Date();
     dateFromDate.setDate(now.getDate() - 14);
-    const dateFrom = dateFromDate.toISOString().split('T')[0];
+    const defaultDateFrom = dateFromDate.toISOString().split('T')[0];
+
+    const dateFrom = from || defaultDateFrom;
+    const dateTo = to || defaultDateTo;
 
     const [exoStats, blastStats] = await Promise.all([
-        fetchStats(sessionToken), // Internal fetchStats uses hardcoded 14 days too
+        fetchStats(sessionToken, dateFrom, dateTo),
         fetchBlastStats(dateFrom, dateTo)
     ]);
 
