@@ -49,6 +49,7 @@ interface StatItem {
   cost?: number;
   value?: number;
   blastRevenue?: number;
+  topsRevenue?: number;
   ctr: number;
   cpm: number;
 }
@@ -163,7 +164,7 @@ export default function Dashboard() {
   // Calculate enhanced metrics for each row
   const enhancedResult = result.map(item => {
     const publisherCost = item.cost || item.revenue || item.value || 0;
-    const topsRevenue = 0; // Column C is no longer used
+    const topsRevenue = item.topsRevenue || 0;
     const blastRevenue = item.blastRevenue || 0;
 
     const netRevenue = topsRevenue + blastRevenue; // E

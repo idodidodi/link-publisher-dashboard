@@ -92,6 +92,41 @@ async function fetchBlastStats(dateFrom: string, dateTo: string) {
     }
 }
 
+async function fetchTopsStats(dateFrom: string, dateTo: string) {
+    const publisherId = process.env.EXOCLICK_PUBLISHER_ID;
+    const userToken = process.env.TOPS_SOLUTION_MEDIA_API_TOKEN;
+
+    if (!publisherId || !userToken) {
+        console.error('Tops credentials missing');
+        return null;
+    }
+
+    const topsUrl = `https://login.topsolutionsmedia.com/admin/api/FeedReports/publisher=${publisherId}/date?version=6&filters=date:${dateFrom}_${dateTo}&userToken=${userToken}&columns=date,feed_cost`;
+
+    try {
+        const response = await fetch(topsUrl);
+        if (!response.ok) {
+            console.error('Tops API failed:', response.status);
+            return null;
+        }
+
+        const data = await response.json();
+        const rows = data.response?.list?.rows || {};
+        const results: Record<string, number> = {};
+
+        for (const key in rows) {
+            const row = rows[key];
+            if (row.date) {
+                results[row.date] = parseFloat(row.feed_cost) || 0;
+            }
+        }
+        return results;
+    } catch (err) {
+        console.error('Error fetching Tops stats:', err);
+        return null;
+    }
+}
+
 export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const from = searchParams.get('from');
@@ -117,20 +152,22 @@ export async function GET(request: Request) {
     const dateFrom = from || defaultDateFrom;
     const dateTo = to || defaultDateTo;
 
-    const [exoStats, blastStats] = await Promise.all([
+    const [exoStats, blastStats, topsStats] = await Promise.all([
         fetchStats(sessionToken, dateFrom, dateTo),
-        fetchBlastStats(dateFrom, dateTo)
+        fetchBlastStats(dateFrom, dateTo),
+        fetchTopsStats(dateFrom, dateTo)
     ]);
 
     if (!exoStats) {
         return NextResponse.json({ error: 'Failed to fetch ExoClick statistics' }, { status: 500 });
     }
 
-    // Merge Blast stats into ExoClick results
-    if (blastStats && exoStats.data.result) {
+    // Merge Blast and Tops stats into ExoClick results
+    if (exoStats.data.result) {
         exoStats.data.result = exoStats.data.result.map((item: any) => ({
             ...item,
-            blastRevenue: blastStats[item.ddate] || 0
+            blastRevenue: blastStats ? (blastStats[item.ddate] || 0) : 0,
+            topsRevenue: topsStats ? (topsStats[item.ddate] || 0) : 0
         }));
     }
 
