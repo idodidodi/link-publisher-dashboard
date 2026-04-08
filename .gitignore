@@ -39,3 +39,11 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+verify_adv.py
+verify_blast.py
+verify_both.py
+verify_cols.py
+verify_exoclick.py
+verify_feeds.py
+verify_granular.py
+verify_tops.py
