@@ -54,38 +54,34 @@ async function fetchStats(sessionToken: string, dateFrom: string, dateTo: string
 }
 
 async function fetchBlastStats(dateFrom: string, dateTo: string) {
-    const login = process.env.BLAST_LOGIN;
-    const password = process.env.BLAST_PASSWORD;
+    const userToken = process.env.BLAST_SOLUTION_MEDIA_API_TOKEN;
+    const publisherId = process.env.EXOCLICK_PUBLISHER_ID_ON_BLAST;
 
-    if (!login || !password) {
+    if (!userToken || !publisherId) {
         console.error('Blast credentials missing');
         return null;
     }
 
-    const dateParam = `${dateFrom}_${dateTo}`;
-    const url = `https://login.blastmedia.site/publisher/svc?action=outcsv&login=${encodeURIComponent(login)}&password=${encodeURIComponent(password)}&channel=FeedReports&dim=date&f.date=${dateParam}&columns=date,pub_requests,pub_clicks,pub_gross,pub_net_clicks,pub_revenue&appType=XML`;
+    const blastUrl = `https://login.blastmedia.site/admin/api/FeedReports/publisher=${publisherId}/date?version=6&filters=date:${dateFrom}_${dateTo}&userToken=${userToken}&columns=date,pub_revenue`;
 
     try {
-        const response = await fetch(url);
+        const response = await fetch(blastUrl);
         if (!response.ok) {
             console.error('Blast API failed:', response.status);
             return null;
         }
 
-        const csvText = await response.text();
-        const lines = csvText.trim().split('\n');
-        const data: Record<string, number> = {};
+        const data = await response.json();
+        const rows = data.response?.list?.rows || {};
+        const results: Record<string, number> = {};
 
-        // Skip header line
-        for (let i = 1; i < lines.length; i++) {
-            const cols = lines[i].split(',');
-            if (cols.length >= 6) {
-                const date = cols[0].trim();
-                const revenue = parseFloat(cols[5]) || 0;
-                data[date] = revenue;
+        for (const key in rows) {
+            const row = rows[key];
+            if (row.date) {
+                results[row.date] = parseFloat(row.pub_revenue) || 0;
             }
         }
-        return data;
+        return results;
     } catch (err) {
         console.error('Error fetching Blast stats:', err);
         return null;
@@ -93,7 +89,7 @@ async function fetchBlastStats(dateFrom: string, dateTo: string) {
 }
 
 async function fetchTopsStats(dateFrom: string, dateTo: string) {
-    const publisherId = process.env.EXOCLICK_PUBLISHER_ID;
+    const publisherId = process.env.EXOCLICK_PUBLISHER_ID_ON_TOPS;
     const userToken = process.env.TOPS_SOLUTION_MEDIA_API_TOKEN;
 
     if (!publisherId || !userToken) {
