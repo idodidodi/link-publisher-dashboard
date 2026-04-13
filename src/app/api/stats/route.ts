@@ -62,7 +62,7 @@ async function fetchBlastStats(dateFrom: string, dateTo: string) {
         return null;
     }
 
-    const blastUrl = `https://login.blastmedia.site/admin/api/FeedReports/publisher=${publisherId}/date?version=6&filters=date:${dateFrom}_${dateTo}&userToken=${userToken}&columns=date,pub_revenue`;
+    const blastUrl = `https://login.blastmedia.site/admin/api/FeedReports/publisher=${publisherId}/date?version=6&filters=date:${dateFrom}_${dateTo}&userToken=${userToken}&columns=date,feed_cost`;
 
     try {
         const response = await fetch(blastUrl);
@@ -78,7 +78,7 @@ async function fetchBlastStats(dateFrom: string, dateTo: string) {
         for (const key in rows) {
             const row = rows[key];
             if (row.date) {
-                results[row.date] = parseFloat(row.pub_revenue) || 0;
+                results[row.date] = parseFloat(row.feed_cost) || 0;
             }
         }
         return results;
