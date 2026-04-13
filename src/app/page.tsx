@@ -190,6 +190,9 @@ export default function Dashboard() {
   const totalProfit = totalNetRev - totalPubCost;
   const totalRoi = totalPubCost === 0 ? 0 : (totalProfit / totalPubCost) * 100;
 
+  // For the table, we want newest on top
+  const tableResult = [...enhancedResult].sort((a, b) => b.ddate.localeCompare(a.ddate));
+
   // Chart Data
   const chartLabels = enhancedResult.map(item => item.ddate);
   const costData = enhancedResult.map(item => item.publisherCost);
@@ -472,7 +475,7 @@ export default function Dashboard() {
               </tr>
             </thead>
             <tbody>
-              {enhancedResult.map((item, idx) => (
+              {tableResult.map((item, idx) => (
                 <tr key={idx}>
                   <td style={{ textAlign: 'left' }}>{item.ddate}</td>
                   <td style={{ fontWeight: 500 }}>${item.publisherCost.toFixed(4)}</td>
