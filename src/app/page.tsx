@@ -460,7 +460,9 @@ export default function Dashboard() {
       </div>
 
       <div className="table-section">
-        <h2 style={{ fontSize: '1.25rem', marginBottom: '1rem' }}>Daily Performance Breakdown</h2>
+        <h2 style={{ fontSize: '1.25rem', marginBottom: '1rem' }}>
+          ExoClick Daily Performance Breakdown ({appliedFrom} — {appliedTo})
+        </h2>
         <div style={{ overflowX: 'auto' }}>
           <table>
             <thead>
