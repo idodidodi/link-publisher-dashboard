@@ -89,7 +89,7 @@ async function fetchBlastStats(dateFrom: string, dateTo: string) {
 }
 
 async function fetchTopsStats(dateFrom: string, dateTo: string) {
-    const publisherId = process.env.EXOCLICK_PUBLISHER_ID_ON_TOPS;
+    const publisherId = process.env.EXOCLICK_TOP_PUBLISHER_ID;
     const userToken = process.env.TOPS_SOLUTION_MEDIA_API_TOKEN;
 
     if (!publisherId || !userToken) {
