@@ -161,8 +161,8 @@ export async function GET(request: Request) {
     const dateTo = to || defaultDateTo;
 
     let sessionToken = null;
-    if (pubConfig.apiToken) {
-        sessionToken = await getSessionToken(pubConfig.apiToken);
+    if ('apiToken' in pubConfig && pubConfig.apiToken) {
+        sessionToken = await getSessionToken(pubConfig.apiToken as string);
     }
 
     const [exoStats, blastStats, topsStats] = await Promise.all([
