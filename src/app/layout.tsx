@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "ExoClick Dashboard",
-  description: "Real-time statistics for ExoClick Advertiser/Publisher",
+  title: "AdKernel Dashboard",
+  description: "Real-time statistics for AdKernel Advertiser/Publisher",
 };
 
 export default function RootLayout({
