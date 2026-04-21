@@ -63,6 +63,40 @@ async function fetchStats(sessionToken: string, dateFrom: string, dateTo: string
     }
 }
 
+async function fetchAdsterraStats(apiKey: string, dateFrom: string, dateTo: string) {
+    const url = `https://api3.adsterratools.com/advertiser/stats.json?start_date=${dateFrom}&finish_date=${dateTo}&group_by[]=date`;
+    try {
+        const response = await fetch(url, {
+            headers: {
+                'X-API-Key': apiKey,
+                'Accept': 'application/json'
+            }
+        });
+
+        if (!response.ok) {
+            console.error('Adsterra API failed:', response.status);
+            return null;
+        }
+
+        const data = await response.json();
+        // Adsterra advertiser stats grouped by date returns an array of objects
+        const items = Array.isArray(data) ? data : [];
+        const result = items.map((item: any) => ({
+            ddate: item.date,
+            impressions: parseInt(item.impressions) || 0,
+            clicks: parseInt(item.clicks) || 0,
+            cost: parseFloat(item.spend) || 0,
+            ctr: parseFloat(item.ctr) || 0,
+            cpm: parseFloat(item.cpm) || 0
+        }));
+
+        return { data: { result }, role: 'Advertiser' };
+    } catch (err) {
+        console.error('Error in fetchAdsterraStats:', err);
+        return null;
+    }
+}
+
 async function fetchBlastStats(publisherId: string | undefined, dateFrom: string, dateTo: string) {
     const userToken = process.env.BLAST_SOLUTION_MEDIA_API_TOKEN;
 
@@ -136,7 +170,10 @@ export async function GET(request: Request) {
     const publisherName = searchParams.get('publisher') || 'Exoclick';
 
     const PUBLISHERS = {
-        Adsterra: { topId: process.env.ADSTERRA_TOP_PUBLISHER_ID },
+        Adsterra: { 
+            topId: process.env.ADSTERRA_TOP_PUBLISHER_ID,
+            apiToken: process.env.ADSTERRA_API_TOKEN
+        },
         Exoclick: {
             topId: process.env.EXOCLICK_TOP_PUBLISHER_ID,
             blastId: process.env.EXOCLICK_PUBLISHER_ID_ON_BLAST,
@@ -160,18 +197,23 @@ export async function GET(request: Request) {
     const dateFrom = from || defaultDateFrom;
     const dateTo = to || defaultDateTo;
 
-    let sessionToken = null;
-    if ('apiToken' in pubConfig && pubConfig.apiToken) {
-        sessionToken = await getSessionToken(pubConfig.apiToken as string);
-    }
-
-    const [exoStats, blastStats, topsStats] = await Promise.all([
-        sessionToken ? fetchStats(sessionToken, dateFrom, dateTo) : Promise.resolve(null),
+    const [platformStats, blastStats, topsStats] = await Promise.all([
+        (async () => {
+            if (publisherName === 'Adsterra' && 'apiToken' in pubConfig && pubConfig.apiToken) {
+                return fetchAdsterraStats(pubConfig.apiToken as string, dateFrom, dateTo);
+            }
+            
+            let sessionToken = null;
+            if ('apiToken' in pubConfig && pubConfig.apiToken) {
+                sessionToken = await getSessionToken(pubConfig.apiToken as string);
+            }
+            return sessionToken ? fetchStats(sessionToken, dateFrom, dateTo) : null;
+        })(),
         fetchBlastStats((pubConfig as any).blastId, dateFrom, dateTo),
         fetchTopsStats(pubConfig.topId, dateFrom, dateTo)
     ]);
 
-    let resultItems = exoStats?.data?.result || [];
+    let resultItems = platformStats?.data?.result || [];
 
     // If we have no exoStats (no Publisher Platform API like for Adsterra), we generate the base dates
     // from 'dateFrom' to 'dateTo'.
@@ -200,6 +242,6 @@ export async function GET(request: Request) {
 
     return NextResponse.json({
         data: { result: resultItems },
-        role: exoStats?.role || 'N/A'
+        role: platformStats?.role || 'N/A'
     });
 }
