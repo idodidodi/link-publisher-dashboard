@@ -3,20 +3,25 @@ import { NextResponse } from 'next/server';
 const API_BASE_URL = 'https://api.exoclick.com/v2';
 
 async function getSessionToken(apiToken: string) {
-    const response = await fetch(`${API_BASE_URL}/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ api_token: apiToken }),
-    });
+    try {
+        const response = await fetch(`${API_BASE_URL}/login`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ api_token: apiToken }),
+        });
 
-    if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Login failed:', response.status, errorText);
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('Login failed:', response.status, errorText);
+            return null;
+        }
+
+        const data = await response.json();
+        return data.token;
+    } catch (err) {
+        console.error('Error in getSessionToken:', err);
         return null;
     }
-
-    const data = await response.json();
-    return data.token;
 }
 
 async function fetchStats(sessionToken: string, dateFrom: string, dateTo: string) {
@@ -30,35 +35,38 @@ async function fetchStats(sessionToken: string, dateFrom: string, dateTo: string
         'date-to': dateTo,
     });
 
-    // Try Advertiser first
-    let role = 'Advertiser';
-    let response = await fetch(`${API_BASE_URL}/statistics/a/date?${params.toString()}`, {
-        headers,
-    });
-
-    if (!response.ok) {
-        // Try Publisher
-        role = 'Publisher';
-        response = await fetch(`${API_BASE_URL}/statistics/p/date?${params.toString()}`, {
+    try {
+        // Try Advertiser first
+        let role = 'Advertiser';
+        let response = await fetch(`${API_BASE_URL}/statistics/a/date?${params.toString()}`, {
             headers,
         });
-    }
 
-    if (!response.ok) {
-        console.error('Failed to fetch stats from both endpoints');
+        if (!response.ok) {
+            // Try Publisher
+            role = 'Publisher';
+            response = await fetch(`${API_BASE_URL}/statistics/p/date?${params.toString()}`, {
+                headers,
+            });
+        }
+
+        if (!response.ok) {
+            console.error('Failed to fetch stats from both endpoints');
+            return null;
+        }
+
+        const data = await response.json();
+        return { data, role };
+    } catch (err) {
+        console.error('Error in fetchStats:', err);
         return null;
     }
-
-    const data = await response.json();
-    return { data, role };
 }
 
-async function fetchBlastStats(dateFrom: string, dateTo: string) {
+async function fetchBlastStats(publisherId: string | undefined, dateFrom: string, dateTo: string) {
     const userToken = process.env.BLAST_SOLUTION_MEDIA_API_TOKEN;
-    const publisherId = process.env.EXOCLICK_PUBLISHER_ID_ON_BLAST;
 
     if (!userToken || !publisherId) {
-        console.error('Blast credentials missing');
         return null;
     }
 
@@ -88,12 +96,10 @@ async function fetchBlastStats(dateFrom: string, dateTo: string) {
     }
 }
 
-async function fetchTopsStats(dateFrom: string, dateTo: string) {
-    const publisherId = process.env.EXOCLICK_TOP_PUBLISHER_ID;
+async function fetchTopsStats(publisherId: string | undefined, dateFrom: string, dateTo: string) {
     const userToken = process.env.TOPS_SOLUTION_MEDIA_API_TOKEN;
 
     if (!publisherId || !userToken) {
-        console.error('Tops credentials missing');
         return null;
     }
 
@@ -127,17 +133,23 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const from = searchParams.get('from');
     const to = searchParams.get('to');
+    const publisherName = searchParams.get('publisher') || 'Exoclick';
 
-    const apiToken = process.env.EXOCLICK_API_TOKEN;
+    const PUBLISHERS = {
+        Adsterra: { topId: process.env.ADSTERRA_TOP_PUBLISHER_ID },
+        Exoclick: {
+            topId: process.env.EXOCLICK_TOP_PUBLISHER_ID,
+            blastId: process.env.EXOCLICK_PUBLISHER_ID_ON_BLAST,
+            apiToken: process.env.EXOCLICK_API_TOKEN
+        },
+        Rollerads: { topId: process.env.ROLLERADS_TOP_PUBLISHER_ID },
+        TrafficShop: { topId: process.env.TRAFFICSHOP_COM_TOP_PUBLISHER_ID },
+        TrafficStars: { topId: process.env.TRAFFICSTARS_TOP_PUBLISHER_ID },
+        Traforama: { topId: process.env.TRAFORAMA_ADSPYGLASS_TOP_PUBLISHER_ID },
+        Twinred: { topId: process.env.TWINRED_TOP_PUBLISHER_ID }
+    };
 
-    if (!apiToken) {
-        return NextResponse.json({ error: 'API Token not found in environment' }, { status: 500 });
-    }
-
-    const sessionToken = await getSessionToken(apiToken);
-    if (!sessionToken) {
-        return NextResponse.json({ error: 'Authentication failed' }, { status: 401 });
-    }
+    const pubConfig = PUBLISHERS[publisherName as keyof typeof PUBLISHERS] || PUBLISHERS['Exoclick'];
 
     const now = new Date();
     const defaultDateTo = now.toISOString().split('T')[0];
@@ -148,24 +160,46 @@ export async function GET(request: Request) {
     const dateFrom = from || defaultDateFrom;
     const dateTo = to || defaultDateTo;
 
+    let sessionToken = null;
+    if (pubConfig.apiToken) {
+        sessionToken = await getSessionToken(pubConfig.apiToken);
+    }
+
     const [exoStats, blastStats, topsStats] = await Promise.all([
-        fetchStats(sessionToken, dateFrom, dateTo),
-        fetchBlastStats(dateFrom, dateTo),
-        fetchTopsStats(dateFrom, dateTo)
+        sessionToken ? fetchStats(sessionToken, dateFrom, dateTo) : Promise.resolve(null),
+        fetchBlastStats((pubConfig as any).blastId, dateFrom, dateTo),
+        fetchTopsStats(pubConfig.topId, dateFrom, dateTo)
     ]);
 
-    if (!exoStats) {
-        return NextResponse.json({ error: 'Failed to fetch ExoClick statistics' }, { status: 500 });
+    let resultItems = exoStats?.data?.result || [];
+
+    // If we have no exoStats (no Publisher Platform API like for Adsterra), we generate the base dates
+    // from 'dateFrom' to 'dateTo'.
+    if (resultItems.length === 0) {
+        let curr = new Date(dateFrom);
+        const end = new Date(dateTo);
+        while (curr <= end) {
+            resultItems.push({
+                ddate: curr.toISOString().split('T')[0],
+                impressions: 0,
+                clicks: 0,
+                cost: null,
+                ctr: 0,
+                cpm: 0
+            });
+            curr.setDate(curr.getDate() + 1);
+        }
     }
 
-    // Merge Blast and Tops stats into ExoClick results
-    if (exoStats.data.result) {
-        exoStats.data.result = exoStats.data.result.map((item: any) => ({
-            ...item,
-            blastRevenue: blastStats ? (blastStats[item.ddate] || 0) : 0,
-            topsRevenue: topsStats ? (topsStats[item.ddate] || 0) : 0
-        }));
-    }
+    // Merge Blast and Tops stats into the results
+    resultItems = resultItems.map((item: any) => ({
+        ...item,
+        blastRevenue: blastStats && blastStats[item.ddate] !== undefined ? blastStats[item.ddate] : null,
+        topsRevenue: topsStats && topsStats[item.ddate] !== undefined ? topsStats[item.ddate] : null
+    }));
 
-    return NextResponse.json(exoStats);
+    return NextResponse.json({
+        data: { result: resultItems },
+        role: exoStats?.role || 'N/A'
+    });
 }

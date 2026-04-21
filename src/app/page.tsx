@@ -57,17 +57,18 @@ interface StatItem {
 interface StatsData {
   data: {
     result: StatItem[];
-    resultTotal?: StatItem;
   };
-  role: 'Advertiser' | 'Publisher';
+  role: string | null;
 }
 
+const PUBLISHERS_TABS = ['Adsterra', 'Exoclick', 'Rollerads', 'TrafficShop', 'TrafficStars', 'Traforama', 'Twinred'];
 
 
 export default function Dashboard() {
   const [stats, setStats] = useState<StatsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [activePublisher, setActivePublisher] = useState('Exoclick');
 
   // Applied dates (used for fetching)
   const [appliedFrom, setAppliedFrom] = useState(() => {
@@ -89,8 +90,9 @@ export default function Dashboard() {
   useEffect(() => {
     async function fetchData() {
       setLoading(true);
+      setError(null);
       try {
-        const response = await fetch(`/api/stats?from=${appliedFrom}&to=${appliedTo}`);
+        const response = await fetch(`/api/stats?publisher=${activePublisher}&from=${appliedFrom}&to=${appliedTo}`);
         if (!response.ok) throw new Error('Failed to fetch stats');
         const data = await response.json();
         setStats(data);
@@ -101,7 +103,7 @@ export default function Dashboard() {
       }
     }
     fetchData();
-  }, [appliedFrom, appliedTo]);
+  }, [appliedFrom, appliedTo, activePublisher]);
 
   const handleApplyDates = () => {
     if (!pendingFrom || !pendingTo) {
@@ -163,13 +165,24 @@ export default function Dashboard() {
 
   // Calculate enhanced metrics for each row
   const enhancedResult = result.map(item => {
-    const publisherCost = item.cost || item.revenue || item.value || 0;
-    const topsRevenue = item.topsRevenue || 0;
-    const blastRevenue = item.blastRevenue || 0;
+    const publisherCost = item.cost !== null ? item.cost : (item.revenue !== undefined ? item.revenue : (item.value !== undefined ? item.value : null));
+    const topsRevenue = item.topsRevenue !== undefined ? item.topsRevenue : null;
+    const blastRevenue = item.blastRevenue !== undefined ? item.blastRevenue : null;
 
-    const netRevenue = topsRevenue + blastRevenue; // E
-    const profit = netRevenue - publisherCost; // F
-    const roi = publisherCost === 0 ? 0 : (profit / publisherCost); // G
+    let netRevenue: number | null = null;
+    if (topsRevenue !== null || blastRevenue !== null) {
+      netRevenue = (topsRevenue || 0) + (blastRevenue || 0);
+    }
+
+    let profit: number | null = null;
+    if (netRevenue !== null && publisherCost !== null) {
+      profit = netRevenue - publisherCost;
+    }
+
+    let roi: number | null = null;
+    if (profit !== null && publisherCost !== null) {
+      roi = publisherCost === 0 ? 0 : (profit / publisherCost) * 100;
+    }
 
     return {
       ...item,
@@ -178,25 +191,51 @@ export default function Dashboard() {
       blastRevenue,
       netRevenue,
       profit,
-      roi: roi * 100 // Convert to percentage
+      roi
     };
   });
 
   // Calculate enhanced totals
-  const totalPubCost = enhancedResult.reduce((sum, item) => sum + item.publisherCost, 0);
-  const totalTopsRev = enhancedResult.reduce((sum, item) => sum + item.topsRevenue, 0);
-  const totalBlastRev = enhancedResult.reduce((sum, item) => sum + item.blastRevenue, 0);
-  const totalNetRev = totalTopsRev + totalBlastRev;
-  const totalProfit = totalNetRev - totalPubCost;
-  const totalRoi = totalPubCost === 0 ? 0 : (totalProfit / totalPubCost) * 100;
+  const totalPubCost = enhancedResult.some(i => i.publisherCost !== null) 
+    ? enhancedResult.reduce((sum, item) => sum + (item.publisherCost || 0), 0) : null;
+  const totalTopsRev = enhancedResult.some(i => i.topsRevenue !== null)
+    ? enhancedResult.reduce((sum, item) => sum + (item.topsRevenue || 0), 0) : null;
+  const totalBlastRev = enhancedResult.some(i => i.blastRevenue !== null)
+    ? enhancedResult.reduce((sum, item) => sum + (item.blastRevenue || 0), 0) : null;
+
+  let totalNetRev: number | null = null;
+  if (totalTopsRev !== null || totalBlastRev !== null) {
+    totalNetRev = (totalTopsRev || 0) + (totalBlastRev || 0);
+  }
+
+  let totalProfit: number | null = null;
+  if (totalNetRev !== null && totalPubCost !== null) {
+    totalProfit = totalNetRev - totalPubCost;
+  }
+
+  let totalRoi: number | null = null;
+  if (totalProfit !== null && totalPubCost !== null) {
+    totalRoi = totalPubCost === 0 ? 0 : (totalProfit / totalPubCost) * 100;
+  }
+
+  // Format helpers
+  const formatCurrency = (val: number | null | undefined, precision = 2) => {
+    if (val === null || val === undefined) return 'N/A';
+    return `$${val.toFixed(precision)}`;
+  };
+
+  const formatPercent = (val: number | null | undefined) => {
+    if (val === null || val === undefined) return 'N/A';
+    return `${val.toFixed(0)}%`;
+  };
 
   // For the table, we want newest on top
   const tableResult = [...enhancedResult].sort((a, b) => b.ddate.localeCompare(a.ddate));
 
-  // Chart Data
+  // Chart Data (use 0 for nulls in the chart so it draws a continuous line instead of breaking)
   const chartLabels = enhancedResult.map(item => item.ddate);
-  const costData = enhancedResult.map(item => item.publisherCost);
-  const netRevenueData = enhancedResult.map(item => item.netRevenue);
+  const costData = enhancedResult.map(item => item.publisherCost || 0);
+  const netRevenueData = enhancedResult.map(item => item.netRevenue || 0);
 
   const lineChartData = {
     labels: chartLabels,
@@ -242,15 +281,55 @@ export default function Dashboard() {
   };
 
   return (
-    <div className="dashboard-container">
+    <div style={{ display: 'flex', minHeight: '100vh', flexDirection: 'row' }}>
+      {/* Sidebar for tabs */}
+      <div style={{ 
+        width: '240px', 
+        borderRight: '1px solid var(--card-border)', 
+        background: 'rgba(255, 255, 255, 0.02)',
+        padding: '1.5rem',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '0.5rem'
+      }}>
+        <h3 style={{ marginBottom: '1rem', color: 'var(--text-dim)', fontSize: '0.9rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+          Publishers
+        </h3>
+        {PUBLISHERS_TABS.map((pub) => (
+          <button
+            key={pub}
+            onClick={() => setActivePublisher(pub)}
+            style={{
+              padding: '0.75rem 1rem',
+              borderRadius: '0.5rem',
+              background: activePublisher === pub ? 'rgba(99, 102, 241, 0.15)' : 'transparent',
+              border: '1px solid',
+              borderColor: activePublisher === pub ? 'var(--accent)' : 'transparent',
+              color: activePublisher === pub ? 'white' : 'var(--text-dim)',
+              textAlign: 'left',
+              cursor: 'pointer',
+              fontWeight: activePublisher === pub ? 600 : 500,
+              transition: 'all 0.2s',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between'
+            }}
+          >
+            {pub}
+          </button>
+        ))}
+      </div>
+
+      {/* Main Content */}
+      <div className="dashboard-container" style={{ flex: 1 }}>
       <header className="header" style={{ marginBottom: '2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div style={{ flex: 1 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-            <h1>Link Publisher Dashboard</h1>
+            <h1>{activePublisher} Dashboard</h1>
           </div>
           <p style={{ color: 'var(--text-dim)', fontSize: '0.875rem', marginTop: '4px' }}>
             <Calendar size={14} style={{ display: 'inline', verticalAlign: 'middle', marginRight: '4px' }} />
-            Performance Tracking • {stats.role} Account
+            Performance Tracking • {stats.role} 
           </p>
         </div>
 
@@ -430,22 +509,22 @@ export default function Dashboard() {
             <DollarSign size={18} color="var(--accent)" />
             Total Cost (B)
           </div>
-          <div className="stat-value">${totalPubCost.toFixed(2)}</div>
+          <div className="stat-value">{formatCurrency(totalPubCost)}</div>
         </div>
         <div className="stat-card">
           <div className="stat-label">
             <Wallet size={18} color="var(--accent-secondary)" />
             Net Revenue (E)
           </div>
-          <div className="stat-value">${totalNetRev.toFixed(2)}</div>
+          <div className="stat-value">{formatCurrency(totalNetRev)}</div>
         </div>
         <div className="stat-card">
           <div className="stat-label">
-            {totalProfit >= 0 ? <ArrowUpRight size={18} color="var(--success)" /> : <ArrowDownRight size={18} color="var(--error)" />}
+            {totalProfit !== null && totalProfit >= 0 ? <ArrowUpRight size={18} color="var(--success)" /> : <ArrowDownRight size={18} color={totalProfit === null ? 'var(--text-dim)' : 'var(--error)'} />}
             Total Profit (F)
           </div>
-          <div className="stat-value" style={{ color: totalProfit >= 0 ? 'var(--success)' : 'var(--error)' }}>
-            ${totalProfit.toFixed(2)}
+          <div className="stat-value" style={{ color: totalProfit === null ? 'var(--text-dim)' : (totalProfit >= 0 ? 'var(--success)' : 'var(--error)') }}>
+            {formatCurrency(totalProfit)}
           </div>
         </div>
         <div className="stat-card">
@@ -453,15 +532,15 @@ export default function Dashboard() {
             <TrendingUp size={18} color="var(--accent)" />
             Overall ROI (G)
           </div>
-          <div className="stat-value" style={{ color: totalRoi >= 0 ? 'var(--success)' : 'var(--error)' }}>
-            {totalRoi.toFixed(1)}%
+          <div className="stat-value" style={{ color: totalRoi === null ? 'var(--text-dim)' : (totalRoi >= 0 ? 'var(--success)' : 'var(--error)') }}>
+            {formatPercent(totalRoi)}
           </div>
         </div>
       </div>
 
       <div className="table-section">
         <h2 style={{ fontSize: '1.25rem', marginBottom: '1rem' }}>
-          ExoClick Daily Performance Breakdown ({appliedFrom} — {appliedTo})
+          Daily Performance Breakdown ({appliedFrom} — {appliedTo})
         </h2>
         <div style={{ overflowX: 'auto' }}>
           <table>
@@ -480,35 +559,47 @@ export default function Dashboard() {
               {tableResult.map((item, idx) => (
                 <tr key={idx}>
                   <td style={{ textAlign: 'left' }}>{item.ddate}</td>
-                  <td style={{ fontWeight: 500 }}>${item.publisherCost.toFixed(4)}</td>
-                  <td style={{ color: item.topsRevenue > 0 ? 'inherit' : 'var(--text-dim)' }}>
-                    ${item.topsRevenue.toFixed(2)}
+                  <td style={{ fontWeight: 500, color: item.publisherCost === null ? 'var(--text-dim)' : 'inherit' }}>
+                    {item.publisherCost === null ? 'N/A' : formatCurrency(item.publisherCost, 4)}
                   </td>
-                  <td style={{ color: item.blastRevenue > 0 ? 'inherit' : 'var(--text-dim)' }}>
-                    ${item.blastRevenue.toFixed(2)}
+                  <td style={{ color: item.topsRevenue !== null && item.topsRevenue > 0 ? 'inherit' : 'var(--text-dim)' }}>
+                    {formatCurrency(item.topsRevenue)}
                   </td>
-                  <td>${item.netRevenue.toFixed(2)}</td>
-                  <td style={{ fontWeight: 600, color: item.profit >= 0 ? 'var(--success)' : 'var(--error)' }}>
-                    ${item.profit.toFixed(2)}
+                  <td style={{ color: item.blastRevenue !== null && item.blastRevenue > 0 ? 'inherit' : 'var(--text-dim)' }}>
+                    {formatCurrency(item.blastRevenue)}
                   </td>
-                  <td style={{ fontWeight: 600, color: item.roi >= 0 ? 'var(--success)' : 'var(--error)' }}>
-                    {item.roi.toFixed(0)}%
+                  <td style={{ color: item.netRevenue === null ? 'var(--text-dim)' : 'inherit' }}>
+                    {formatCurrency(item.netRevenue)}
+                  </td>
+                  <td style={{ fontWeight: 600, color: item.profit === null ? 'var(--text-dim)' : (item.profit >= 0 ? 'var(--success)' : 'var(--error)') }}>
+                    {formatCurrency(item.profit)}
+                  </td>
+                  <td style={{ fontWeight: 600, color: item.roi === null ? 'var(--text-dim)' : (item.roi >= 0 ? 'var(--success)' : 'var(--error)') }}>
+                    {formatPercent(item.roi)}
                   </td>
                 </tr>
               ))}
             </tbody>
             <tfoot>
-              <tr style={{ borderTop: '2px solid var(--border)', background: 'rgba(255,255,255,0.02)' }}>
+              <tr style={{ borderTop: '2px solid var(--card-border)', background: 'rgba(255,255,255,0.02)' }}>
                 <td style={{ textAlign: 'left', fontWeight: 'bold' }}>TOTAL</td>
-                <td style={{ fontWeight: 'bold' }}>${totalPubCost.toFixed(2)}</td>
-                <td style={{ fontWeight: 'bold' }}>${totalTopsRev.toFixed(2)}</td>
-                <td style={{ fontWeight: 'bold' }}>${totalBlastRev.toFixed(2)}</td>
-                <td style={{ fontWeight: 'bold' }}>${totalNetRev.toFixed(2)}</td>
-                <td style={{ fontWeight: 'bold', color: totalProfit >= 0 ? 'var(--success)' : 'var(--error)' }}>
-                  ${totalProfit.toFixed(2)}
+                <td style={{ fontWeight: 'bold', color: totalPubCost === null ? 'var(--text-dim)' : 'inherit' }}>
+                  {formatCurrency(totalPubCost)}
                 </td>
-                <td style={{ fontWeight: 'bold', color: totalRoi >= 0 ? 'var(--success)' : 'var(--error)' }}>
-                  {totalRoi.toFixed(0)}%
+                <td style={{ fontWeight: 'bold', color: totalTopsRev === null ? 'var(--text-dim)' : 'inherit' }}>
+                  {formatCurrency(totalTopsRev)}
+                </td>
+                <td style={{ fontWeight: 'bold', color: totalBlastRev === null ? 'var(--text-dim)' : 'inherit' }}>
+                  {formatCurrency(totalBlastRev)}
+                </td>
+                <td style={{ fontWeight: 'bold', color: totalNetRev === null ? 'var(--text-dim)' : 'inherit' }}>
+                  {formatCurrency(totalNetRev)}
+                </td>
+                <td style={{ fontWeight: 'bold', color: totalProfit === null ? 'var(--text-dim)' : (totalProfit >= 0 ? 'var(--success)' : 'var(--error)') }}>
+                  {formatCurrency(totalProfit)}
+                </td>
+                <td style={{ fontWeight: 'bold', color: totalRoi === null ? 'var(--text-dim)' : (totalRoi >= 0 ? 'var(--success)' : 'var(--error)') }}>
+                  {formatPercent(totalRoi)}
                 </td>
               </tr>
             </tfoot>
@@ -524,6 +615,9 @@ export default function Dashboard() {
           <Line options={chartOptions as any} data={lineChartData} />
         </div>
       </div>
+    {/* Close Main Content */}
+    </div>
+    {/* Close Layout Flex Container */}
     </div>
   );
 }
