@@ -165,9 +165,9 @@ export default function Dashboard() {
 
   // Calculate enhanced metrics for each row
   const enhancedResult = result.map(item => {
-    const publisherCost = item.cost !== null ? item.cost : (item.revenue !== undefined ? item.revenue : (item.value !== undefined ? item.value : null));
-    const topsRevenue = item.topsRevenue !== undefined ? item.topsRevenue : null;
-    const blastRevenue = item.blastRevenue !== undefined ? item.blastRevenue : null;
+    const publisherCost = item.cost ?? item.revenue ?? item.value ?? null;
+    const topsRevenue = item.topsRevenue ?? null;
+    const blastRevenue = item.blastRevenue ?? null;
 
     let netRevenue: number | null = null;
     if (topsRevenue !== null || blastRevenue !== null) {
