@@ -77,15 +77,14 @@ async function fetchAdsterraStats(apiKey: string, dateFrom: string, dateTo: stri
             console.error('Adsterra API failed:', response.status);
             return null;
         }
-
         const data = await response.json();
-        // Adsterra advertiser stats grouped by date returns an array of objects
-        const items = Array.isArray(data) ? data : [];
+        // Adsterra advertiser stats grouped by date returns an object with an 'items' array
+        const items = data?.items || [];
         const result = items.map((item: any) => ({
             ddate: item.date,
             impressions: parseInt(item.impressions) || 0,
             clicks: parseInt(item.clicks) || 0,
-            cost: parseFloat(item.spend) || 0,
+            cost: parseFloat(item.spent) || 0,
             ctr: parseFloat(item.ctr) || 0,
             cpm: parseFloat(item.cpm) || 0
         }));
@@ -170,13 +169,14 @@ export async function GET(request: Request) {
     const publisherName = searchParams.get('publisher') || 'Exoclick';
 
     const PUBLISHERS = {
-        Adsterra: { 
+        Adsterra: {
             topId: process.env.ADSTERRA_TOP_PUBLISHER_ID,
+            blastId: process.env.ADSTERRA_BLAST_PUBLISHER_ID,
             apiToken: process.env.ADSTERRA_API_TOKEN
         },
         Exoclick: {
             topId: process.env.EXOCLICK_TOP_PUBLISHER_ID,
-            blastId: process.env.EXOCLICK_PUBLISHER_ID_ON_BLAST,
+            blastId: process.env.EXOCLICK_BLAST_PUBLISHER_ID,
             apiToken: process.env.EXOCLICK_API_TOKEN
         },
         Rollerads: { topId: process.env.ROLLERADS_TOP_PUBLISHER_ID },
@@ -202,7 +202,7 @@ export async function GET(request: Request) {
             if (publisherName === 'Adsterra' && 'apiToken' in pubConfig && pubConfig.apiToken) {
                 return fetchAdsterraStats(pubConfig.apiToken as string, dateFrom, dateTo);
             }
-            
+
             let sessionToken = null;
             if ('apiToken' in pubConfig && pubConfig.apiToken) {
                 sessionToken = await getSessionToken(pubConfig.apiToken as string);
