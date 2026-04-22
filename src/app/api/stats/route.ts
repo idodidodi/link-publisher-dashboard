@@ -179,11 +179,31 @@ export async function GET(request: Request) {
             blastId: process.env.EXOCLICK_BLAST_PUBLISHER_ID,
             apiToken: process.env.EXOCLICK_API_TOKEN
         },
-        Rollerads: { topId: process.env.ROLLERADS_TOP_PUBLISHER_ID },
-        TrafficShop: { topId: process.env.TRAFFICSHOP_COM_TOP_PUBLISHER_ID },
-        TrafficStars: { topId: process.env.TRAFFICSTARS_TOP_PUBLISHER_ID },
-        Traforama: { topId: process.env.TRAFORAMA_ADSPYGLASS_TOP_PUBLISHER_ID },
-        Twinred: { topId: process.env.TWINRED_TOP_PUBLISHER_ID }
+        Rollerads: {
+            topId: process.env.ROLLERADS_TOP_PUBLISHER_ID,
+            blastId: process.env.ROLLERADS_BLAST_PUBLISHER_ID,
+            // apiToken: process.env.ROLLERADS_API_TOKEN
+        },
+        TrafficShop: {
+            topId: process.env.TRAFFICSHOP_COM_TOP_PUBLISHER_ID,
+            blastId: process.env.TRAFFICSHOP_COM_BLAST_PUBLISHER_ID,
+            // apiToken: process.env.TRAFFICSHOP_COM_API_TOKEN
+        },
+        TrafficStars: {
+            topId: process.env.TRAFFICSTARS_TOP_PUBLISHER_ID,
+            blastId: process.env.TRAFFICSTARS_BLAST_PUBLISHER_ID,
+            // apiToken: process.env.TRAFFICSTARS_API_TOKEN
+        },
+        Traforama: {
+            topId: process.env.TRAFORAMA_ADSPYGLASS_TOP_PUBLISHER_ID,
+            blastId: process.env.TRAFORAMA_BLAST_PUBLISHER_ID,
+            // apiToken: process.env.TRAFORAMA_API_TOKEN
+        },
+        Twinred: {
+            topId: process.env.TWINRED_TOP_PUBLISHER_ID,
+            blastId: process.env.TWINRED_BLAST_PUBLISHER_ID,
+            // apiToken: process.env.TWINRED_API_TOKEN
+        }
     };
 
     const pubConfig = PUBLISHERS[publisherName as keyof typeof PUBLISHERS] || PUBLISHERS['Exoclick'];
