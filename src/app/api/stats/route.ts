@@ -308,7 +308,7 @@ export async function GET(request: Request) {
     const dateFrom = from || defaultDateFrom;
     const dateTo = to || defaultDateTo;
 
-    const [platformStats, blastStats, topsStats, blastZoneStats] = await Promise.all([
+    const [platformStats, blastStats, topsStats, blastZoneStats]: any[] = await Promise.all([
         (async () => {
             if (publisherName === 'Adsterra' && 'apiToken' in pubConfig && pubConfig.apiToken) {
                 return fetchAdsterraStats(pubConfig.apiToken as string, dateFrom, dateTo);
@@ -328,7 +328,7 @@ export async function GET(request: Request) {
         ['TrafficStars', 'Traforama', 'Twinred'].includes(publisherName) ? fetchBlastZoneStats((pubConfig as any).blastId, dateFrom, dateTo) : Promise.resolve(null)
     ]);
 
-    let resultItems = platformStats?.data?.result || [];
+    let resultItems = (platformStats as any)?.data?.result || [];
 
     // If we have no exoStats (no Publisher Platform API like for Adsterra), we generate the base dates
     // from 'dateFrom' to 'dateTo'.
