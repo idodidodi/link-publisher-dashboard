@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import https from 'https';
 
 const API_BASE_URL = 'https://api.exoclick.com/v2';
 
@@ -96,6 +97,62 @@ async function fetchAdsterraStats(apiKey: string, dateFrom: string, dateTo: stri
     }
 }
 
+async function fetchTrafficStarsAdvertiserStats(apiToken: string, dateFrom: string, dateTo: string) {
+    return new Promise((resolve) => {
+        const data = JSON.stringify({ date_from: dateFrom, date_to: dateTo });
+
+        const options = {
+            hostname: 'api.trafficstars.com',
+            path: '/v1.1/advertiser/custom/report/by-day',
+            method: 'GET',
+            headers: {
+                'Authorization': `Bearer ${apiToken}`,
+                'Content-Type': 'application/json',
+                'Content-Length': Buffer.byteLength(data)
+            }
+        };
+
+        const req = https.request(options, (res) => {
+            let responseData = '';
+            res.on('data', (chunk) => { responseData += chunk; });
+            res.on('end', () => {
+                if (res.statusCode && (res.statusCode < 200 || res.statusCode >= 300)) {
+                    console.error('TrafficStars Advertiser API failed:', res.statusCode, responseData);
+                    resolve(null);
+                    return;
+                }
+                try {
+                    const parsed = JSON.parse(responseData);
+                    if (Array.isArray(parsed)) {
+                        const result = parsed.map((item: any) => ({
+                            ddate: item.day,
+                            impressions: parseInt(item.impressions) || 0,
+                            clicks: parseInt(item.clicks) || 0,
+                            cost: parseFloat(item.amount) || 0,
+                            ctr: parseFloat(item.ctr) || 0,
+                            cpm: parseFloat(item.ecpm) || 0
+                        }));
+                        resolve({ data: { result }, role: 'Advertiser' });
+                    } else {
+                        resolve(null);
+                    }
+                } catch (e) {
+                    console.error('Error parsing TrafficStars Advertiser stats:', e);
+                    resolve(null);
+                }
+            });
+        });
+
+        req.on('error', (e) => {
+            console.error('Error fetching TrafficStars Advertiser stats:', e);
+            resolve(null);
+        });
+
+        req.write(data);
+        req.end();
+    });
+}
+
 async function fetchBlastStats(publisherId: string | undefined, dateFrom: string, dateTo: string) {
     const userToken = process.env.BLAST_SOLUTION_MEDIA_API_TOKEN;
 
@@ -125,6 +182,40 @@ async function fetchBlastStats(publisherId: string | undefined, dateFrom: string
         return results;
     } catch (err) {
         console.error('Error fetching Blast stats:', err);
+        return null;
+    }
+}
+
+async function fetchBlastZoneStats(publisherId: string | undefined, dateFrom: string, dateTo: string) {
+    const userToken = process.env.BLAST_SOLUTION_MEDIA_API_TOKEN;
+
+    if (!userToken || !publisherId) {
+        return null;
+    }
+
+    const blastZoneUrl = `https://login.blastmedia.site/admin/api/ZoneReports/publisher=${publisherId}/date?version=6&filters=date:${dateFrom}_${dateTo}&userToken=${userToken}&range=0-40`;
+
+    try {
+        const response = await fetch(blastZoneUrl);
+        if (!response.ok) {
+            console.error('Blast Zone API failed:', response.status);
+            return null;
+        }
+
+        const data = await response.json();
+        const rows = data.response?.list?.rows || {};
+        const results: Record<string, number> = {};
+
+        for (const key in rows) {
+            const row = rows[key];
+            if (row.date) {
+                // Using rtb_pub_revenue as the revenue metric from ZoneReports
+                results[row.date] = parseFloat(row.rtb_pub_revenue) || 0;
+            }
+        }
+        return results;
+    } catch (err) {
+        console.error('Error fetching Blast Zone stats:', err);
         return null;
     }
 }
@@ -192,7 +283,7 @@ export async function GET(request: Request) {
         TrafficStars: {
             topId: process.env.TRAFFICSTARS_TOP_PUBLISHER_ID,
             blastId: process.env.TRAFFICSTARS_BLAST_PUBLISHER_ID,
-            // apiToken: process.env.TRAFFICSTARS_API_TOKEN
+            apiToken: process.env.TRAFFICSTARS_API_TOKEN
         },
         Traforama: {
             topId: process.env.TRAFORAMA_ADSPYGLASS_TOP_PUBLISHER_ID,
@@ -217,10 +308,13 @@ export async function GET(request: Request) {
     const dateFrom = from || defaultDateFrom;
     const dateTo = to || defaultDateTo;
 
-    const [platformStats, blastStats, topsStats] = await Promise.all([
+    const [platformStats, blastStats, topsStats, blastZoneStats] = await Promise.all([
         (async () => {
             if (publisherName === 'Adsterra' && 'apiToken' in pubConfig && pubConfig.apiToken) {
                 return fetchAdsterraStats(pubConfig.apiToken as string, dateFrom, dateTo);
+            }
+            if (publisherName === 'TrafficStars' && 'apiToken' in pubConfig && pubConfig.apiToken) {
+                return fetchTrafficStarsAdvertiserStats(pubConfig.apiToken as string, dateFrom, dateTo);
             }
 
             let sessionToken = null;
@@ -230,7 +324,8 @@ export async function GET(request: Request) {
             return sessionToken ? fetchStats(sessionToken, dateFrom, dateTo) : null;
         })(),
         fetchBlastStats((pubConfig as any).blastId, dateFrom, dateTo),
-        fetchTopsStats(pubConfig.topId, dateFrom, dateTo)
+        fetchTopsStats(pubConfig.topId, dateFrom, dateTo),
+        ['TrafficStars', 'Traforama', 'Twinred'].includes(publisherName) ? fetchBlastZoneStats((pubConfig as any).blastId, dateFrom, dateTo) : Promise.resolve(null)
     ]);
 
     let resultItems = platformStats?.data?.result || [];
@@ -257,6 +352,7 @@ export async function GET(request: Request) {
     resultItems = resultItems.map((item: any) => ({
         ...item,
         blastRevenue: blastStats && blastStats[item.ddate] !== undefined ? blastStats[item.ddate] : null,
+        blastZoneRevenue: blastZoneStats && blastZoneStats[item.ddate] !== undefined ? blastZoneStats[item.ddate] : null,
         topsRevenue: topsStats && topsStats[item.ddate] !== undefined ? topsStats[item.ddate] : null
     }));
 
