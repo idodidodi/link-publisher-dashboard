@@ -333,7 +333,6 @@ export async function GET(request: Request) {
             }
             if (publisherName === 'TrafficStars' && 'refreshToken' in pubConfig && pubConfig.refreshToken) {
                 const tsToken = await getTrafficStarsSessionToken(pubConfig.refreshToken as string);
-                console.log('tsToken', tsToken);
                 if (tsToken) {
                     return fetchTrafficStarsAdvertiserStats(tsToken, dateFrom, dateTo);
                 }
