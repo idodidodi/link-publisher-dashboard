@@ -97,6 +97,46 @@ async function fetchAdsterraStats(apiKey: string, dateFrom: string, dateTo: stri
     }
 }
 
+let cachedTrafficStarsToken: { token: string, expiresAt: number } | null = null;
+
+async function getTrafficStarsSessionToken(refreshToken: string) {
+    if (cachedTrafficStarsToken && Date.now() < cachedTrafficStarsToken.expiresAt) {
+        return cachedTrafficStarsToken.token;
+    }
+
+    const url = 'https://api.trafficstars.com/v1/auth/token';
+    const params = new URLSearchParams();
+    params.append('grant_type', 'refresh_token');
+    params.append('refresh_token', refreshToken);
+
+    try {
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: params.toString()
+        });
+
+        if (!response.ok) {
+            console.error('TrafficStars auth failed:', response.status, await response.text());
+            return null;
+        }
+
+        const data = await response.json();
+
+        // Cache the token with a 5-minute safety buffer before expiration
+        const expiresInMs = (data.expires_in || 86400) * 1000;
+        cachedTrafficStarsToken = {
+            token: data.access_token,
+            expiresAt: Date.now() + expiresInMs - 300000
+        };
+
+        return data.access_token;
+    } catch (err) {
+        console.error('Error fetching TrafficStars session token:', err);
+        return null;
+    }
+}
+
 async function fetchTrafficStarsAdvertiserStats(apiToken: string, dateFrom: string, dateTo: string) {
     const url = `https://api.trafficstars.com/v1.1/advertiser/custom/report/by-day?date_from=${dateFrom}&date_to=${dateTo}`;
     try {
@@ -261,7 +301,7 @@ export async function GET(request: Request) {
         TrafficStars: {
             topId: process.env.TRAFFICSTARS_TOP_PUBLISHER_ID,
             blastId: process.env.TRAFFICSTARS_BLAST_PUBLISHER_ID,
-            apiToken: process.env.TRAFFICSTARS_API_TOKEN
+            refreshToken: process.env.TRAFFICSTARS_REFRESH_TOKEN
         },
         Traforama: {
             topId: process.env.TRAFORAMA_ADSPYGLASS_TOP_PUBLISHER_ID,
@@ -291,8 +331,13 @@ export async function GET(request: Request) {
             if (publisherName === 'Adsterra' && 'apiToken' in pubConfig && pubConfig.apiToken) {
                 return fetchAdsterraStats(pubConfig.apiToken as string, dateFrom, dateTo);
             }
-            if (publisherName === 'TrafficStars' && 'apiToken' in pubConfig && pubConfig.apiToken) {
-                return fetchTrafficStarsAdvertiserStats(pubConfig.apiToken as string, dateFrom, dateTo);
+            if (publisherName === 'TrafficStars' && 'refreshToken' in pubConfig && pubConfig.refreshToken) {
+                const tsToken = await getTrafficStarsSessionToken(pubConfig.refreshToken as string);
+                console.log('tsToken', tsToken);
+                if (tsToken) {
+                    return fetchTrafficStarsAdvertiserStats(tsToken, dateFrom, dateTo);
+                }
+                return null;
             }
 
             let sessionToken = null;
