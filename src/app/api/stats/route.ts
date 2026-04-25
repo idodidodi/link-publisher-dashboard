@@ -98,59 +98,37 @@ async function fetchAdsterraStats(apiKey: string, dateFrom: string, dateTo: stri
 }
 
 async function fetchTrafficStarsAdvertiserStats(apiToken: string, dateFrom: string, dateTo: string) {
-    return new Promise((resolve) => {
-        const data = JSON.stringify({ date_from: dateFrom, date_to: dateTo });
-
-        const options = {
-            hostname: 'api.trafficstars.com',
-            path: '/v1.1/advertiser/custom/report/by-day',
-            method: 'GET',
+    const url = `https://api.trafficstars.com/v1.1/advertiser/custom/report/by-day?date_from=${dateFrom}&date_to=${dateTo}`;
+    try {
+        const response = await fetch(url, {
             headers: {
                 'Authorization': `Bearer ${apiToken}`,
-                'Content-Type': 'application/json',
-                'Content-Length': Buffer.byteLength(data)
+                'Accept': 'application/json'
             }
-        };
-
-        const req = https.request(options, (res) => {
-            let responseData = '';
-            res.on('data', (chunk) => { responseData += chunk; });
-            res.on('end', () => {
-                if (res.statusCode && (res.statusCode < 200 || res.statusCode >= 300)) {
-                    console.error('TrafficStars Advertiser API failed:', res.statusCode, responseData);
-                    resolve(null);
-                    return;
-                }
-                try {
-                    const parsed = JSON.parse(responseData);
-                    if (Array.isArray(parsed)) {
-                        const result = parsed.map((item: any) => ({
-                            ddate: item.day,
-                            impressions: parseInt(item.impressions) || 0,
-                            clicks: parseInt(item.clicks) || 0,
-                            cost: parseFloat(item.amount) || 0,
-                            ctr: parseFloat(item.ctr) || 0,
-                            cpm: parseFloat(item.ecpm) || 0
-                        }));
-                        resolve({ data: { result }, role: 'Advertiser' });
-                    } else {
-                        resolve(null);
-                    }
-                } catch (e) {
-                    console.error('Error parsing TrafficStars Advertiser stats:', e);
-                    resolve(null);
-                }
-            });
         });
 
-        req.on('error', (e) => {
-            console.error('Error fetching TrafficStars Advertiser stats:', e);
-            resolve(null);
-        });
+        if (!response.ok) {
+            console.error('TrafficStars Advertiser API failed:', response.status);
+            return null;
+        }
 
-        req.write(data);
-        req.end();
-    });
+        const parsed = await response.json();
+        if (Array.isArray(parsed)) {
+            const result = parsed.map((item: any) => ({
+                ddate: item.day,
+                impressions: parseInt(item.impressions) || 0,
+                clicks: parseInt(item.clicks) || 0,
+                cost: parseFloat(item.amount) || 0,
+                ctr: parseFloat(item.ctr) || 0,
+                cpm: parseFloat(item.ecpm) || 0
+            }));
+            return { data: { result }, role: 'Advertiser' };
+        }
+        return null;
+    } catch (err) {
+        console.error('Error fetching TrafficStars Advertiser stats:', err);
+        return null;
+    }
 }
 
 async function fetchBlastStats(publisherId: string | undefined, dateFrom: string, dateTo: string) {
