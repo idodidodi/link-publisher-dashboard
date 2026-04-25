@@ -49,6 +49,7 @@ interface StatItem {
   cost?: number;
   value?: number;
   blastRevenue?: number;
+  blastZoneRevenue?: number;
   topsRevenue?: number;
   ctr: number;
   cpm: number;
@@ -180,10 +181,11 @@ export default function Dashboard() {
     const publisherCost = item.cost ?? item.revenue ?? item.value ?? null;
     const topsRevenue = item.topsRevenue ?? null;
     const blastRevenue = item.blastRevenue ?? null;
+    const blastZoneRevenue = item.blastZoneRevenue ?? null;
 
     let netRevenue: number | null = null;
-    if (topsRevenue !== null || blastRevenue !== null) {
-      netRevenue = (topsRevenue || 0) + (blastRevenue || 0);
+    if (topsRevenue !== null || blastRevenue !== null || blastZoneRevenue !== null) {
+      netRevenue = (topsRevenue || 0) + (blastRevenue || 0) + (blastZoneRevenue || 0);
     }
 
     let profit: number | null = null;
@@ -201,6 +203,7 @@ export default function Dashboard() {
       publisherCost,
       topsRevenue,
       blastRevenue,
+      blastZoneRevenue,
       netRevenue,
       profit,
       roi
@@ -214,10 +217,12 @@ export default function Dashboard() {
     ? enhancedResult.reduce((sum, item) => sum + (item.topsRevenue || 0), 0) : null;
   const totalBlastRev = enhancedResult.some(i => i.blastRevenue !== null)
     ? enhancedResult.reduce((sum, item) => sum + (item.blastRevenue || 0), 0) : null;
+  const totalBlastZoneRev = enhancedResult.some(i => i.blastZoneRevenue !== null)
+    ? enhancedResult.reduce((sum, item) => sum + (item.blastZoneRevenue || 0), 0) : null;
 
   let totalNetRev: number | null = null;
-  if (totalTopsRev !== null || totalBlastRev !== null) {
-    totalNetRev = (totalTopsRev || 0) + (totalBlastRev || 0);
+  if (totalTopsRev !== null || totalBlastRev !== null || totalBlastZoneRev !== null) {
+    totalNetRev = (totalTopsRev || 0) + (totalBlastRev || 0) + (totalBlastZoneRev || 0);
   }
 
   let totalProfit: number | null = null;
@@ -261,7 +266,7 @@ export default function Dashboard() {
         tension: 0.4,
       },
       {
-        label: 'Net Revenue (E) ($)',
+        label: 'Net Revenue (F) ($)',
         data: netRevenueData,
         borderColor: '#a855f7',
         backgroundColor: 'rgba(168, 85, 247, 0.1)',
@@ -526,14 +531,14 @@ export default function Dashboard() {
           <div className="stat-card">
             <div className="stat-label">
               <Wallet size={18} color="var(--accent-secondary)" />
-              Net Revenue (E)
+              Net Revenue (F)
             </div>
             <div className="stat-value">{formatCurrency(totalNetRev)}</div>
           </div>
           <div className="stat-card">
             <div className="stat-label">
               {totalProfit !== null && totalProfit >= 0 ? <ArrowUpRight size={18} color="var(--success)" /> : <ArrowDownRight size={18} color={totalProfit === null ? 'var(--text-dim)' : 'var(--error)'} />}
-              Total Profit (F)
+              Total Profit (G)
             </div>
             <div className="stat-value" style={{ color: totalProfit === null ? 'var(--text-dim)' : (totalProfit >= 0 ? 'var(--success)' : 'var(--error)') }}>
               {formatCurrency(totalProfit)}
@@ -542,7 +547,7 @@ export default function Dashboard() {
           <div className="stat-card">
             <div className="stat-label">
               <TrendingUp size={18} color="var(--accent)" />
-              Overall ROI (G)
+              Overall ROI (H)
             </div>
             <div className="stat-value" style={{ color: totalRoi === null ? 'var(--text-dim)' : (totalRoi >= 0 ? 'var(--success)' : 'var(--error)') }}>
               {formatPercent(totalRoi)}
@@ -562,9 +567,10 @@ export default function Dashboard() {
                   <th>Pub Cost (B)</th>
                   <th>Tops Rev (C)</th>
                   <th>Blast Rev (D)</th>
-                  <th>Net Rev (E)</th>
-                  <th>Profit (F)</th>
-                  <th>ROI (G)</th>
+                  <th>Blast Disp (E)</th>
+                  <th>Net Rev (F)</th>
+                  <th>Profit (G)</th>
+                  <th>ROI (H)</th>
                 </tr>
               </thead>
               <tbody>
@@ -579,6 +585,9 @@ export default function Dashboard() {
                     </td>
                     <td style={{ color: item.blastRevenue !== null && item.blastRevenue > 0 ? 'inherit' : 'var(--text-dim)' }}>
                       {formatCurrency(item.blastRevenue)}
+                    </td>
+                    <td style={{ color: item.blastZoneRevenue !== null && item.blastZoneRevenue > 0 ? 'inherit' : 'var(--text-dim)' }}>
+                      {formatCurrency(item.blastZoneRevenue)}
                     </td>
                     <td style={{ color: item.netRevenue === null ? 'var(--text-dim)' : 'inherit' }}>
                       {formatCurrency(item.netRevenue)}
@@ -603,6 +612,9 @@ export default function Dashboard() {
                   </td>
                   <td style={{ fontWeight: 'bold', color: totalBlastRev === null ? 'var(--text-dim)' : 'inherit' }}>
                     {formatCurrency(totalBlastRev)}
+                  </td>
+                  <td style={{ fontWeight: 'bold', color: totalBlastZoneRev === null ? 'var(--text-dim)' : 'inherit' }}>
+                    {formatCurrency(totalBlastZoneRev)}
                   </td>
                   <td style={{ fontWeight: 'bold', color: totalNetRev === null ? 'var(--text-dim)' : 'inherit' }}>
                     {formatCurrency(totalNetRev)}

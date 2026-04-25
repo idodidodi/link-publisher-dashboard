@@ -227,8 +227,8 @@ async function fetchBlastZoneStats(publisherId: string | undefined, dateFrom: st
         for (const key in rows) {
             const row = rows[key];
             if (row.date) {
-                // Using rtb_pub_revenue as the revenue metric from ZoneReports
-                results[row.date] = parseFloat(row.rtb_pub_revenue) || 0;
+                // Using rtb_rem_cost as the remote feed revenue metric from ZoneReports
+                results[row.date] = parseFloat(row.rtb_rem_cost) || 0;
             }
         }
         return results;
