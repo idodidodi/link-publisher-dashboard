@@ -327,9 +327,9 @@ export async function GET(request: Request) {
             // apiToken: process.env.ROLLERADS_API_TOKEN
         },
         TrafficShop: {
-            topId: process.env.TRAFFICSHOP_COM_TOP_PUBLISHER_ID,
-            blastId: process.env.TRAFFICSHOP_COM_BLAST_PUBLISHER_ID,
-            apiToken: process.env.TRAFFICSHOP_COM_API_TOKEN
+            topId: process.env.TRAFFICSHOP_TOP_PUBLISHER_ID,
+            blastId: process.env.TRAFFICSHOP_BLAST_PUBLISHER_ID,
+            apiToken: process.env.TRAFFICSHOP_API_TOKEN
         },
         TrafficStars: {
             topId: process.env.TRAFFICSTARS_TOP_PUBLISHER_ID,
