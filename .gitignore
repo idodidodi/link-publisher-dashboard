@@ -49,3 +49,4 @@ verify_granular.py
 verify_tops.py
 scratch/test_blast_api.js
 scratch/fetch_blast_zone.js
+scratch/test_trafficshop_api.js
