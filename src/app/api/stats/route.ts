@@ -171,6 +171,39 @@ async function fetchTrafficStarsAdvertiserStats(apiToken: string, dateFrom: stri
     }
 }
 
+async function fetchTrafficShopStats(apiToken: string, dateFrom: string, dateTo: string) {
+    const url = `https://api.trafficshop.com/v1/advertisers/analytics?start-date=${dateFrom}&end-date=${dateTo}&dimensions=date&metrics=spent`;
+    try {
+        const response = await fetch(url, {
+            headers: {
+                'Authorization': `Bearer ${apiToken}`,
+                'User-Agent': 'insomnia/12.5.0'
+            }
+        });
+
+        if (!response.ok) {
+            console.error('TrafficShop API failed:', response.status);
+            return null;
+        }
+
+        const data = await response.json();
+        const rows = data.rows || [];
+        const result = rows.map((row: any) => ({
+            ddate: row[0],
+            cost: parseFloat(row[1]) || 0,
+            impressions: 0,
+            clicks: 0,
+            ctr: 0,
+            cpm: 0
+        }));
+
+        return { data: { result }, role: 'Advertiser' };
+    } catch (err) {
+        console.error('Error fetching TrafficShop stats:', err);
+        return null;
+    }
+}
+
 async function fetchBlastStats(publisherId: string | undefined, dateFrom: string, dateTo: string) {
     const userToken = process.env.BLAST_SOLUTION_MEDIA_API_TOKEN;
 
@@ -296,7 +329,7 @@ export async function GET(request: Request) {
         TrafficShop: {
             topId: process.env.TRAFFICSHOP_COM_TOP_PUBLISHER_ID,
             blastId: process.env.TRAFFICSHOP_COM_BLAST_PUBLISHER_ID,
-            // apiToken: process.env.TRAFFICSHOP_COM_API_TOKEN
+            apiToken: process.env.TRAFFICSHOP_COM_API_TOKEN
         },
         TrafficStars: {
             topId: process.env.TRAFFICSTARS_TOP_PUBLISHER_ID,
@@ -337,6 +370,9 @@ export async function GET(request: Request) {
                     return fetchTrafficStarsAdvertiserStats(tsToken, dateFrom, dateTo);
                 }
                 return null;
+            }
+            if (publisherName === 'TrafficShop' && 'apiToken' in pubConfig && pubConfig.apiToken) {
+                return fetchTrafficShopStats(pubConfig.apiToken as string, dateFrom, dateTo);
             }
 
             let sessionToken = null;
