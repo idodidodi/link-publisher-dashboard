@@ -52,3 +52,4 @@ scratch/fetch_blast_zone.js
 scratch/test_trafficshop_api.js
 scratch/explore_twinred.js
 scratch/test_twinred_top.js
+scratch/check_env.js
