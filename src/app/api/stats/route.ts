@@ -213,6 +213,8 @@ async function getTwinredSessionToken(clientId: string, clientSecret: string, ca
     }
 
     const url = 'https://control.twinred.com/api/v1/oauth2/token';
+    console.log(`[Twinred Auth Debug] cacheKey=${cacheKey}, clientId length=${clientId?.length}, clientSecret length=${clientSecret?.length}, clientSecret ends with: ${clientSecret?.slice(-4)}`);
+
     const params = new URLSearchParams();
     params.append('client_id', clientId);
     params.append('client_secret', clientSecret);
