@@ -212,9 +212,12 @@ function decodeB64(encoded: string | undefined): string | undefined {
 }
 
 async function getTwinredSessionToken(clientId: string, clientSecret: string, cacheKey: 'blast' | 'top') {
-    const cached = cacheKey === 'blast' ? cachedTwinredBlastToken : cachedTwinredTopToken;
-    if (cached && Date.now() < cached.expiresAt) {
-        return cached.token;
+    // Top tokens are NOT cached (fresh fetch each request) to avoid stale auth issues
+    if (cacheKey !== 'top') {
+        const cached = cacheKey === 'blast' ? cachedTwinredBlastToken : cachedTwinredTopToken;
+        if (cached && Date.now() < cached.expiresAt) {
+            return cached.token;
+        }
     }
 
     const url = 'https://control.twinred.com/api/v1/oauth2/token';
@@ -245,7 +248,7 @@ async function getTwinredSessionToken(clientId: string, clientSecret: string, ca
         };
 
         if (cacheKey === 'blast') cachedTwinredBlastToken = entry;
-        else cachedTwinredTopToken = entry;
+        // Top: no caching
 
         return data.access_token;
     } catch (err) {
@@ -431,7 +434,7 @@ export async function GET(request: Request) {
         'Twinred Blast': {
             blastId: process.env.TWINRED_BLAST_PUBLISHER_ID,
             clientId: process.env.TWINRED_BLAST_CLIENT_ID,
-            clientSecret: decodeB64(process.env.TWINRED_BLAST_CLIENT_SECRET_B64),
+            clientSecret: process.env.TWINRED_BLAST_CLIENT_SECRET,
             advId: process.env.TWINRED_BLAST_ADVERTISER_ID,
         }
     };
