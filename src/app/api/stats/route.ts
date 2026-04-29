@@ -206,6 +206,11 @@ async function fetchTrafficShopStats(apiToken: string, dateFrom: string, dateTo:
     }
 }
 
+function decodeB64(encoded: string | undefined): string | undefined {
+    if (!encoded) return undefined;
+    return Buffer.from(encoded, 'base64').toString('utf-8');
+}
+
 async function getTwinredSessionToken(clientId: string, clientSecret: string, cacheKey: 'blast' | 'top') {
     const cached = cacheKey === 'blast' ? cachedTwinredBlastToken : cachedTwinredTopToken;
     if (cached && Date.now() < cached.expiresAt) {
@@ -420,13 +425,13 @@ export async function GET(request: Request) {
         'Twinred Top': {
             topId: process.env.TWINRED_TOP_PUBLISHER_ID,
             clientId: process.env.TWINRED_TOP_CLIENT_ID,
-            clientSecret: process.env.TWINRED_TOP_CLIENT_SECRET,
+            clientSecret: decodeB64(process.env.TWINRED_TOP_CLIENT_SECRET_B64),
             advId: process.env.TWINRED_TOP_ADVERTISER_ID,
         },
         'Twinred Blast': {
             blastId: process.env.TWINRED_BLAST_PUBLISHER_ID,
             clientId: process.env.TWINRED_BLAST_CLIENT_ID,
-            clientSecret: process.env.TWINRED_BLAST_CLIENT_SECRET,
+            clientSecret: decodeB64(process.env.TWINRED_BLAST_CLIENT_SECRET_B64),
             advId: process.env.TWINRED_BLAST_ADVERTISER_ID,
         }
     };
