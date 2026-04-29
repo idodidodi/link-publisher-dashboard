@@ -62,7 +62,7 @@ interface StatsData {
   role: string | null;
 }
 
-const PUBLISHERS_TABS = ['Adsterra', 'Exoclick', 'Rollerads', 'TrafficShop', 'TrafficStars', 'Traforama', 'Twinred'];
+const PUBLISHERS_TABS = ['Adsterra', 'Exoclick', 'Rollerads', 'TrafficShop', 'TrafficStars', 'Traforama', 'Twinred Top', 'Twinred Blast'];
 
 
 export default function Dashboard() {
@@ -249,7 +249,9 @@ export default function Dashboard() {
   // For the table, we want newest on top
   const tableResult = [...enhancedResult].sort((a, b) => b.ddate.localeCompare(a.ddate));
 
-  const showBlastDisp = ['TrafficStars', 'Traforama', 'Twinred'].includes(activePublisher);
+  const showBlastDisp = ['TrafficStars', 'Traforama', 'Twinred Blast'].includes(activePublisher);
+  const showTopsRev = activePublisher !== 'Twinred Blast';
+  const showBlastRev = activePublisher !== 'Twinred Top';
 
   // Chart Data (use 0 for nulls in the chart so it draws a continuous line instead of breaking)
   const chartLabels = enhancedResult.map(item => item.ddate);
@@ -567,8 +569,8 @@ export default function Dashboard() {
                 <tr>
                   <th style={{ textAlign: 'left' }}>Date (A)</th>
                   <th>Pub Cost (B)</th>
-                  <th>Tops Rev (C)</th>
-                  <th>Blast Rev (D)</th>
+                  {showTopsRev && <th>Tops Rev (C)</th>}
+                  {showBlastRev && <th>Blast Rev (D)</th>}
                   {showBlastDisp && <th>Blast Disp (E)</th>}
                   <th>Net Rev (F)</th>
                   <th>Profit (G)</th>
@@ -582,12 +584,16 @@ export default function Dashboard() {
                     <td style={{ fontWeight: 500, color: item.publisherCost === null ? 'var(--text-dim)' : 'inherit' }}>
                       {item.publisherCost === null ? 'N/A' : formatCurrency(item.publisherCost, 4)}
                     </td>
-                    <td style={{ color: item.topsRevenue !== null && item.topsRevenue > 0 ? 'inherit' : 'var(--text-dim)' }}>
-                      {formatCurrency(item.topsRevenue)}
-                    </td>
-                    <td style={{ color: item.blastRevenue !== null && item.blastRevenue > 0 ? 'inherit' : 'var(--text-dim)' }}>
-                      {formatCurrency(item.blastRevenue)}
-                    </td>
+                    {showTopsRev && (
+                      <td style={{ color: item.topsRevenue !== null && item.topsRevenue > 0 ? 'inherit' : 'var(--text-dim)' }}>
+                        {formatCurrency(item.topsRevenue)}
+                      </td>
+                    )}
+                    {showBlastRev && (
+                      <td style={{ color: item.blastRevenue !== null && item.blastRevenue > 0 ? 'inherit' : 'var(--text-dim)' }}>
+                        {formatCurrency(item.blastRevenue)}
+                      </td>
+                    )}
                     {showBlastDisp && (
                       <td style={{ color: item.blastZoneRevenue !== null && item.blastZoneRevenue > 0 ? 'inherit' : 'var(--text-dim)' }}>
                         {formatCurrency(item.blastZoneRevenue)}
@@ -611,12 +617,16 @@ export default function Dashboard() {
                   <td style={{ fontWeight: 'bold', color: totalPubCost === null ? 'var(--text-dim)' : 'inherit' }}>
                     {formatCurrency(totalPubCost)}
                   </td>
-                  <td style={{ fontWeight: 'bold', color: totalTopsRev === null ? 'var(--text-dim)' : 'inherit' }}>
-                    {formatCurrency(totalTopsRev)}
-                  </td>
-                  <td style={{ fontWeight: 'bold', color: totalBlastRev === null ? 'var(--text-dim)' : 'inherit' }}>
-                    {formatCurrency(totalBlastRev)}
-                  </td>
+                  {showTopsRev && (
+                    <td style={{ fontWeight: 'bold', color: totalTopsRev === null ? 'var(--text-dim)' : 'inherit' }}>
+                      {formatCurrency(totalTopsRev)}
+                    </td>
+                  )}
+                  {showBlastRev && (
+                    <td style={{ fontWeight: 'bold', color: totalBlastRev === null ? 'var(--text-dim)' : 'inherit' }}>
+                      {formatCurrency(totalBlastRev)}
+                    </td>
+                  )}
                   {showBlastDisp && (
                     <td style={{ fontWeight: 'bold', color: totalBlastZoneRev === null ? 'var(--text-dim)' : 'inherit' }}>
                       {formatCurrency(totalBlastZoneRev)}

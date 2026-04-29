@@ -98,6 +98,8 @@ async function fetchAdsterraStats(apiKey: string, dateFrom: string, dateTo: stri
 }
 
 let cachedTrafficStarsToken: { token: string, expiresAt: number } | null = null;
+let cachedTwinredBlastToken: { token: string, expiresAt: number } | null = null;
+let cachedTwinredTopToken: { token: string, expiresAt: number } | null = null;
 
 async function getTrafficStarsSessionToken(refreshToken: string) {
     if (cachedTrafficStarsToken && Date.now() < cachedTrafficStarsToken.expiresAt) {
@@ -200,6 +202,78 @@ async function fetchTrafficShopStats(apiToken: string, dateFrom: string, dateTo:
         return { data: { result }, role: 'Advertiser' };
     } catch (err) {
         console.error('Error fetching TrafficShop stats:', err);
+        return null;
+    }
+}
+
+async function getTwinredSessionToken(clientId: string, clientSecret: string, cacheKey: 'blast' | 'top') {
+    const cached = cacheKey === 'blast' ? cachedTwinredBlastToken : cachedTwinredTopToken;
+    if (cached && Date.now() < cached.expiresAt) {
+        return cached.token;
+    }
+
+    const url = 'https://control.twinred.com/api/v1/oauth2/token';
+    const params = new URLSearchParams();
+    params.append('client_id', clientId);
+    params.append('client_secret', clientSecret);
+
+    try {
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: params.toString()
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('Twinred auth failed:', response.status, errorText);
+            return null;
+        }
+
+        const data = await response.json();
+        const expiresInMs = (data.expires_in || 3600) * 1000;
+        const entry = {
+            token: data.access_token,
+            expiresAt: Date.now() + expiresInMs - 300000 // 5 min buffer
+        };
+
+        if (cacheKey === 'blast') cachedTwinredBlastToken = entry;
+        else cachedTwinredTopToken = entry;
+
+        return data.access_token;
+    } catch (err) {
+        console.error('Error fetching Twinred session token:', err);
+        return null;
+    }
+}
+
+async function fetchTwinredAdvertiserStats(token: string, advertiserId: string, dateFrom: string, dateTo: string) {
+    const url = `https://control.twinred.com/api/v1/stats/advertisers/${advertiserId}?startDate=${dateFrom}&endDate=${dateTo}&dimensions=date`;
+    console.log(`Calling Twinred API: ${url}`);
+    try {
+        const response = await fetch(url, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('Twinred API failed:', response.status, errorText);
+            return null;
+        }
+
+        const data = await response.json();
+        const result = data.map((item: any) => ({
+            ddate: item.dimensions.date,
+            cost: item.measures.cost || 0,
+            impressions: item.measures.impressions || 0,
+            clicks: item.measures.clicks || 0,
+            ctr: item.measures.clicks && item.measures.impressions ? (item.measures.clicks / item.measures.impressions) * 100 : 0,
+            cpm: item.measures.cost && item.measures.impressions ? (item.measures.cost / item.measures.impressions) * 1000 : 0
+        }));
+
+        return { data: { result }, role: 'Advertiser' };
+    } catch (err) {
+        console.error('Error fetching Twinred stats:', err);
         return null;
     }
 }
@@ -341,10 +415,17 @@ export async function GET(request: Request) {
             blastId: process.env.TRAFORAMA_BLAST_PUBLISHER_ID,
             // apiToken: process.env.TRAFORAMA_API_TOKEN
         },
-        Twinred: {
+        'Twinred Top': {
             topId: process.env.TWINRED_TOP_PUBLISHER_ID,
+            clientId: process.env.TWINRED_TOP_CLIENT_ID,
+            clientSecret: process.env.TWINRED_TOP_CLIENT_SECRET,
+            advId: process.env.TWINRED_TOP_ADVERTISER_ID,
+        },
+        'Twinred Blast': {
             blastId: process.env.TWINRED_BLAST_PUBLISHER_ID,
-            // apiToken: process.env.TWINRED_API_TOKEN
+            clientId: process.env.TWINRED_BLAST_CLIENT_ID,
+            clientSecret: process.env.TWINRED_BLAST_CLIENT_SECRET,
+            advId: process.env.TWINRED_BLAST_ADVERTISER_ID,
         }
     };
 
@@ -374,6 +455,11 @@ export async function GET(request: Request) {
             if (publisherName === 'TrafficShop' && 'apiToken' in pubConfig && pubConfig.apiToken) {
                 return fetchTrafficShopStats(pubConfig.apiToken as string, dateFrom, dateTo);
             }
+            if (publisherName.startsWith('Twinred') && 'clientId' in pubConfig && pubConfig.clientId) {
+                const cacheKey = publisherName.endsWith('Blast') ? 'blast' : 'top';
+                const token = await getTwinredSessionToken(pubConfig.clientId as string, pubConfig.clientSecret as string, cacheKey);
+                return token && pubConfig.advId ? fetchTwinredAdvertiserStats(token, pubConfig.advId as string, dateFrom, dateTo) : null;
+            }
 
             let sessionToken = null;
             if ('apiToken' in pubConfig && pubConfig.apiToken) {
@@ -382,29 +468,37 @@ export async function GET(request: Request) {
             return sessionToken ? fetchStats(sessionToken, dateFrom, dateTo) : null;
         })(),
         fetchBlastStats((pubConfig as any).blastId, dateFrom, dateTo),
-        fetchTopsStats(pubConfig.topId, dateFrom, dateTo),
-        ['TrafficStars', 'Traforama', 'Twinred'].includes(publisherName) ? fetchBlastZoneStats((pubConfig as any).blastId, dateFrom, dateTo) : Promise.resolve(null)
+        fetchTopsStats((pubConfig as any).topId, dateFrom, dateTo),
+        ['TrafficStars', 'Traforama', 'Twinred Blast'].includes(publisherName) ? fetchBlastZoneStats((pubConfig as any).blastId, dateFrom, dateTo) : Promise.resolve(null)
     ]);
 
-    let resultItems = (platformStats as any)?.data?.result || [];
-
-    // If we have no exoStats (no Publisher Platform API like for Adsterra), we generate the base dates
-    // from 'dateFrom' to 'dateTo'.
-    if (resultItems.length === 0) {
-        let curr = new Date(dateFrom);
-        const end = new Date(dateTo);
-        while (curr <= end) {
-            resultItems.push({
-                ddate: curr.toISOString().split('T')[0],
-                impressions: 0,
-                clicks: 0,
-                cost: null,
-                ctr: 0,
-                cpm: 0
-            });
-            curr.setDate(curr.getDate() + 1);
-        }
+    // Create a base map with all dates in the range
+    const itemsMap: Record<string, any> = {};
+    let curr = new Date(dateFrom);
+    const end = new Date(dateTo);
+    while (curr <= end) {
+        const d = curr.toISOString().split('T')[0];
+        itemsMap[d] = {
+            ddate: d,
+            impressions: 0,
+            clicks: 0,
+            cost: null,
+            ctr: 0,
+            cpm: 0
+        };
+        curr.setDate(curr.getDate() + 1);
     }
+
+    const platformResult = (platformStats as any)?.data?.result || [];
+    console.log(`Platform stats for ${publisherName}: ${platformResult.length} items found`);
+
+    platformResult.forEach((item: any) => {
+        if (itemsMap[item.ddate]) {
+            itemsMap[item.ddate] = { ...itemsMap[item.ddate], ...item };
+        }
+    });
+
+    let resultItems = Object.values(itemsMap);
 
     // Merge Blast and Tops stats into the results
     resultItems = resultItems.map((item: any) => ({
