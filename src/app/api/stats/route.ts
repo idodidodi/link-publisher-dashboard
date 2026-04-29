@@ -441,6 +441,11 @@ export async function GET(request: Request) {
 
     const pubConfig = PUBLISHERS[publisherName as keyof typeof PUBLISHERS] || PUBLISHERS['Exoclick'];
 
+    if (publisherName === 'Twinred Top') {
+        const secret = (pubConfig as any).clientSecret;
+        console.log(`[Twinred Top Debug] raw B64 env length=${process.env.TWINRED_TOP_CLIENT_SECRET_B64?.length}, decoded length=${secret?.length}, decoded ends with: ${secret?.slice(-4)}`);
+    }
+
     const now = new Date();
     const defaultDateTo = now.toISOString().split('T')[0];
     const dateFromDate = new Date();
