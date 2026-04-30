@@ -101,6 +101,9 @@ let cachedTrafficStarsToken: { token: string, expiresAt: number } | null = null;
 let cachedTwinredBlastToken: { token: string, expiresAt: number } | null = null;
 let cachedTwinredTopToken: { token: string, expiresAt: number } | null = null;
 
+const statsCache = new Map<string, { data: any, expiresAt: number }>();
+const STATS_CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+
 async function getTrafficStarsSessionToken(refreshToken: string) {
     if (cachedTrafficStarsToken && Date.now() < cachedTrafficStarsToken.expiresAt) {
         return cachedTrafficStarsToken.token;
@@ -394,6 +397,21 @@ export async function GET(request: Request) {
     const to = searchParams.get('to');
     const publisherName = searchParams.get('publisher') || 'Exoclick';
 
+    const now = new Date();
+    const defaultDateTo = now.toISOString().split('T')[0];
+    const dateFromDate = new Date();
+    dateFromDate.setDate(now.getDate() - 14);
+    const defaultDateFrom = dateFromDate.toISOString().split('T')[0];
+    const dateFrom = from || defaultDateFrom;
+    const dateTo = to || defaultDateTo;
+
+    const cacheKey = `${publisherName}:${dateFrom}:${dateTo}`;
+    const cachedEntry = statsCache.get(cacheKey);
+    if (cachedEntry && Date.now() < cachedEntry.expiresAt) {
+        console.log(`[Stats Cache] HIT for ${cacheKey}`);
+        return NextResponse.json(cachedEntry.data);
+    }
+
     const PUBLISHERS = {
         Adsterra: {
             topId: process.env.ADSTERRA_TOP_PUBLISHER_ID,
@@ -446,14 +464,7 @@ export async function GET(request: Request) {
         console.log(`[Twinred Top Debug] raw B64 env length=${process.env.TWINRED_TOP_CLIENT_SECRET_B64?.length}, decoded length=${secret?.length}, decoded ends with: ${secret?.slice(-4)}`);
     }
 
-    const now = new Date();
-    const defaultDateTo = now.toISOString().split('T')[0];
-    const dateFromDate = new Date();
-    dateFromDate.setDate(now.getDate() - 14);
-    const defaultDateFrom = dateFromDate.toISOString().split('T')[0];
 
-    const dateFrom = from || defaultDateFrom;
-    const dateTo = to || defaultDateTo;
 
     const [platformStats, blastStats, topsStats, blastZoneStats]: any[] = await Promise.all([
         (async () => {
@@ -523,8 +534,13 @@ export async function GET(request: Request) {
         topsRevenue: topsStats && topsStats[item.ddate] !== undefined ? topsStats[item.ddate] : null
     }));
 
-    return NextResponse.json({
+    const responseData = {
         data: { result: resultItems },
         role: platformStats?.role || 'N/A'
-    });
+    };
+
+    statsCache.set(cacheKey, { data: responseData, expiresAt: Date.now() + STATS_CACHE_TTL_MS });
+    console.log(`[Stats Cache] MISS — cached ${cacheKey}`);
+
+    return NextResponse.json(responseData);
 }
