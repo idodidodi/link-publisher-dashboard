@@ -26,6 +26,7 @@ import {
   ArrowUpRight,
   Wallet,
   Settings2,
+  MoreHorizontal,
   X
 } from 'lucide-react';
 
@@ -100,6 +101,7 @@ export default function Dashboard() {
   const [pendingFrom, setPendingFrom] = useState(appliedFrom);
   const [pendingTo, setPendingTo] = useState(appliedTo);
   const [validationError, setValidationError] = useState<string | null>(null);
+  const [shortcutMenuOpen, setShortcutMenuOpen] = useState(false);
 
 
   useEffect(() => {
@@ -129,18 +131,23 @@ export default function Dashboard() {
       setValidationError('Start date cannot be after end date.');
       return;
     }
-
     setValidationError(null);
     setAppliedFrom(pendingFrom);
     setAppliedTo(pendingTo);
     setIsModalOpen(false);
   };
 
-  const applyShortcut = (from: string, to: string) => {
+  const openModal = () => {
+    setPendingFrom(appliedFrom);
+    setPendingTo(appliedTo);
     setValidationError(null);
+    setIsModalOpen(true);
+  };
+
+  const applyShortcut = (from: string, to: string) => {
     setAppliedFrom(from);
     setAppliedTo(to);
-    setIsModalOpen(false);
+    setShortcutMenuOpen(false);
   };
 
   const getShortcuts = () => {
@@ -169,12 +176,6 @@ export default function Dashboard() {
     ];
   };
 
-  const openModal = () => {
-    setPendingFrom(appliedFrom);
-    setPendingTo(appliedTo);
-    setValidationError(null);
-    setIsModalOpen(true);
-  };
 
   if (loading) {
     return (
@@ -389,67 +390,126 @@ export default function Dashboard() {
             </p>
           </div>
 
-          <button
-            onClick={openModal}
-            className="date-filter-trigger"
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.75rem',
-              padding: '0.6rem 1.25rem',
-              background: 'rgba(255, 255, 255, 0.05)',
-              backdropFilter: 'blur(10px)',
-              borderRadius: '0.75rem',
-              border: '1px solid rgba(255, 255, 255, 0.1)',
-              color: 'white',
-              cursor: 'pointer',
-              transition: 'all 0.2s ease',
-              boxShadow: '0 4px 15px rgba(0, 0, 0, 0.1)'
-            }}
-          >
-            <Calendar size={18} color="var(--accent)" />
-            <span style={{ fontSize: '0.9rem', fontWeight: 500 }}>
-              {appliedFrom} — {appliedTo}
-            </span>
-          </button>
+          {/* Date controls: calendar button + ··· shortcuts */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', position: 'relative' }}>
+            {/* Main date button → opens modal */}
+            <button
+              onClick={openModal}
+              className="date-filter-trigger"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.75rem',
+                padding: '0.6rem 1.25rem',
+                background: 'rgba(255, 255, 255, 0.05)',
+                backdropFilter: 'blur(10px)',
+                borderRadius: '0.75rem',
+                border: '1px solid rgba(255, 255, 255, 0.1)',
+                color: 'white',
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+                boxShadow: '0 4px 15px rgba(0, 0, 0, 0.1)'
+              }}
+            >
+              <Calendar size={18} color="var(--accent)" />
+              <span style={{ fontSize: '0.9rem', fontWeight: 500 }}>
+                {appliedFrom} — {appliedTo}
+              </span>
+            </button>
+
+            {/* ··· shortcuts button */}
+            <button
+              onClick={() => setShortcutMenuOpen(o => !o)}
+              title="Date shortcuts"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: '36px',
+                height: '36px',
+                background: shortcutMenuOpen ? 'rgba(99,102,241,0.2)' : 'rgba(255,255,255,0.05)',
+                border: '1px solid',
+                borderColor: shortcutMenuOpen ? 'var(--accent)' : 'rgba(255,255,255,0.1)',
+                borderRadius: '0.75rem',
+                color: 'white',
+                cursor: 'pointer',
+                transition: 'all 0.15s ease'
+              }}
+            >
+              <MoreHorizontal size={16} />
+            </button>
+
+            {/* Shortcuts dropdown */}
+            {shortcutMenuOpen && (
+              <>
+                <div onClick={() => setShortcutMenuOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 999 }} />
+                <div style={{
+                  position: 'absolute',
+                  top: 'calc(100% + 8px)',
+                  right: 0,
+                  zIndex: 1000,
+                  background: '#1e1e2d',
+                  border: '1px solid rgba(255,255,255,0.1)',
+                  borderRadius: '0.75rem',
+                  boxShadow: '0 16px 40px rgba(0,0,0,0.5)',
+                  padding: '0.75rem',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '0.35rem',
+                  minWidth: '160px'
+                }}>
+                  {getShortcuts().map(s => (
+                    <button
+                      key={s.label}
+                      onClick={() => { setAppliedFrom(s.from); setAppliedTo(s.to); setShortcutMenuOpen(false); }}
+                      style={{
+                        padding: '0.45rem 0.75rem',
+                        borderRadius: '0.5rem',
+                        border: 'none',
+                        background: appliedFrom === s.from && appliedTo === s.to ? 'rgba(99,102,241,0.25)' : 'transparent',
+                        color: appliedFrom === s.from && appliedTo === s.to ? 'white' : 'var(--text-dim)',
+                        fontSize: '0.82rem',
+                        fontWeight: appliedFrom === s.from && appliedTo === s.to ? 600 : 400,
+                        cursor: 'pointer',
+                        textAlign: 'left',
+                        whiteSpace: 'nowrap'
+                      }}
+                      onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.07)')}
+                      onMouseLeave={e => (e.currentTarget.style.background = appliedFrom === s.from && appliedTo === s.to ? 'rgba(99,102,241,0.25)' : 'transparent')}
+                    >
+                      {s.label}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
         </header>
 
         {/* Date Selection Modal */}
         {isModalOpen && (
           <div style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
+            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
             background: 'rgba(0, 0, 0, 0.7)',
             backdropFilter: 'blur(4px)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 1000,
-            padding: '1rem'
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            zIndex: 1000, padding: '1rem'
           }}>
             <div style={{
               background: '#1e1e2d',
-              width: '100%',
-              maxWidth: '400px',
+              width: '100%', maxWidth: '400px',
               borderRadius: '1.25rem',
               border: '1px solid rgba(255, 255, 255, 0.1)',
               boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
-              overflow: 'hidden',
-              display: 'flex',
-              flexDirection: 'column'
+              overflow: 'hidden', display: 'flex', flexDirection: 'column'
             }}>
               <div style={{
                 padding: '1.25rem',
                 borderBottom: '1px solid rgba(255, 255, 255, 0.05)',
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center'
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center'
               }}>
                 <h3 style={{ margin: 0, fontSize: '1.1rem' }}>Select Date Range</h3>
-                 <button
+                <button
                   onClick={() => setIsModalOpen(false)}
                   style={{ background: 'transparent', border: 'none', color: 'var(--text-dim)', cursor: 'pointer', padding: '4px' }}
                 >
@@ -457,35 +517,9 @@ export default function Dashboard() {
                 </button>
               </div>
 
-              {/* Shortcuts */}
-              <div style={{ padding: '1rem 1.5rem 0', display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
-                {getShortcuts().map(s => (
-                  <button
-                    key={s.label}
-                    onClick={() => applyShortcut(s.from, s.to)}
-                    style={{
-                      padding: '0.35rem 0.75rem',
-                      borderRadius: '999px',
-                      border: '1px solid rgba(255,255,255,0.15)',
-                      background: appliedFrom === s.from && appliedTo === s.to ? 'var(--accent)' : 'rgba(255,255,255,0.05)',
-                      color: 'white',
-                      fontSize: '0.78rem',
-                      fontWeight: 500,
-                      cursor: 'pointer',
-                      transition: 'all 0.15s ease',
-                      whiteSpace: 'nowrap'
-                    }}
-                  >
-                    {s.label}
-                  </button>
-                ))}
-              </div>
-
               <div style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                  <label style={{ fontSize: '0.75rem', color: 'var(--text-dim)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                    Start Date
-                  </label>
+                  <label style={{ fontSize: '0.75rem', color: 'var(--text-dim)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Start Date</label>
                   <input
                     type="date"
                     value={pendingFrom}
@@ -493,20 +527,13 @@ export default function Dashboard() {
                     style={{
                       background: 'rgba(255, 255, 255, 0.05)',
                       border: '1px solid rgba(255, 255, 255, 0.1)',
-                      borderRadius: '0.5rem',
-                      padding: '0.75rem',
-                      color: 'white',
-                      fontSize: '1rem',
-                      outline: 'none',
-                      width: '100%'
+                      borderRadius: '0.5rem', padding: '0.75rem',
+                      color: 'white', fontSize: '1rem', outline: 'none', width: '100%'
                     }}
                   />
                 </div>
-
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                  <label style={{ fontSize: '0.75rem', color: 'var(--text-dim)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                    End Date
-                  </label>
+                  <label style={{ fontSize: '0.75rem', color: 'var(--text-dim)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>End Date</label>
                   <input
                     type="date"
                     value={pendingTo}
@@ -514,26 +541,17 @@ export default function Dashboard() {
                     style={{
                       background: 'rgba(255, 255, 255, 0.05)',
                       border: '1px solid rgba(255, 255, 255, 0.1)',
-                      borderRadius: '0.5rem',
-                      padding: '0.75rem',
-                      color: 'white',
-                      fontSize: '1rem',
-                      outline: 'none',
-                      width: '100%'
+                      borderRadius: '0.5rem', padding: '0.75rem',
+                      color: 'white', fontSize: '1rem', outline: 'none', width: '100%'
                     }}
                   />
                 </div>
-
                 {validationError && (
                   <div style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '0.5rem',
+                    display: 'flex', alignItems: 'center', gap: '0.5rem',
                     padding: '0.75rem',
                     background: 'rgba(239, 68, 68, 0.1)',
-                    borderRadius: '0.5rem',
-                    color: '#ef4444',
-                    fontSize: '0.85rem'
+                    borderRadius: '0.5rem', color: '#ef4444', fontSize: '0.85rem'
                   }}>
                     <AlertCircle size={16} />
                     {validationError}
@@ -541,47 +559,29 @@ export default function Dashboard() {
                 )}
               </div>
 
-              <div style={{
-                padding: '1.25rem',
-                background: 'rgba(255, 255, 255, 0.02)',
-                display: 'flex',
-                gap: '1rem'
-              }}>
+              <div style={{ padding: '1.25rem', background: 'rgba(255,255,255,0.02)', display: 'flex', gap: '1rem' }}>
                 <button
                   onClick={() => setIsModalOpen(false)}
                   style={{
-                    flex: 1,
-                    padding: '0.75rem',
-                    borderRadius: '0.5rem',
-                    border: '1px solid rgba(255, 255, 255, 0.1)',
-                    background: 'transparent',
-                    color: 'white',
-                    cursor: 'pointer',
-                    fontWeight: 500
+                    flex: 1, padding: '0.75rem', borderRadius: '0.5rem',
+                    border: '1px solid rgba(255,255,255,0.1)', background: 'transparent',
+                    color: 'white', cursor: 'pointer', fontWeight: 500
                   }}
-                >
-                  Cancel
-                </button>
+                >Cancel</button>
                 <button
                   onClick={handleApplyDates}
                   style={{
-                    flex: 1,
-                    padding: '0.75rem',
-                    borderRadius: '0.5rem',
-                    border: 'none',
-                    background: 'var(--accent)',
-                    color: 'white',
-                    cursor: 'pointer',
-                    fontWeight: 600,
+                    flex: 1, padding: '0.75rem', borderRadius: '0.5rem',
+                    border: 'none', background: 'var(--accent)',
+                    color: 'white', cursor: 'pointer', fontWeight: 600,
                     boxShadow: '0 4px 12px rgba(99, 102, 241, 0.3)'
                   }}
-                >
-                  Apply Dates
-                </button>
+                >Apply Dates</button>
               </div>
             </div>
           </div>
         )}
+
 
         <div className="summary-grid">
           <div className="stat-card">
