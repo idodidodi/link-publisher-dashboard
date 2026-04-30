@@ -101,44 +101,7 @@ let cachedTrafficStarsToken: { token: string, expiresAt: number } | null = null;
 let cachedTwinredBlastToken: { token: string, expiresAt: number } | null = null;
 let cachedTwinredTopToken: { token: string, expiresAt: number } | null = null;
 
-const dayStatsCache = new Map<string, { item: any, role: string, cachedAt: number }>();
-const DAY_CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 
-function getDaysInRange(from: string, to: string): string[] {
-    const days: string[] = [];
-    let c = new Date(from + 'T00:00:00Z');
-    const e = new Date(to + 'T00:00:00Z');
-    while (c <= e) {
-        days.push(c.toISOString().split('T')[0]);
-        c.setUTCDate(c.getUTCDate() + 1);
-    }
-    return days;
-}
-
-// Fields expected to be non-null for a day to be considered complete, per publisher
-const PUBLISHER_EXPECTED_FIELDS: Record<string, string[]> = {
-    Adsterra: ['cost', 'topsRevenue', 'blastRevenue'],
-    Exoclick: ['cost', 'topsRevenue', 'blastRevenue'],
-    Rollerads: ['topsRevenue', 'blastRevenue'],
-    TrafficShop: ['cost', 'topsRevenue', 'blastRevenue'],
-    TrafficStars: ['cost', 'topsRevenue', 'blastRevenue', 'blastZoneRevenue'],
-    Traforama: ['cost', 'topsRevenue', 'blastRevenue', 'blastZoneRevenue'],
-    'Twinred Top': ['cost', 'topsRevenue'],
-    'Twinred Blast': ['cost', 'blastRevenue', 'blastZoneRevenue'],
-};
-
-function isItemCacheable(item: any, publisherName: string): boolean {
-    const expectedFields = PUBLISHER_EXPECTED_FIELDS[publisherName] ?? [];
-    const nullExpectedFields = Object.entries(item)
-        .filter(([field, value]) => value == null && expectedFields.includes(field))
-        .map(([field]) => field);
-
-    if (nullExpectedFields.length > 0) {
-        console.log(`[Day Cache] NOT cacheable ${publisherName} ${item.ddate}: missing expected fields: ${nullExpectedFields.join(', ')}`);
-        return false;
-    }
-    return true;
-}
 
 async function getTrafficStarsSessionToken(refreshToken: string) {
     if (cachedTrafficStarsToken && Date.now() < cachedTrafficStarsToken.expiresAt) {
@@ -498,36 +461,7 @@ export async function GET(request: Request) {
     const dateFrom = from || defaultDateFrom;
     const dateTo = to || defaultDateTo;
 
-    const host = new URL(request.url).host;
 
-    // --- Day-level smart cache ---
-    const allDays = getDaysInRange(dateFrom, dateTo);
-    const cachedItems: any[] = [];
-    let fetchFromIdx = allDays.length; // assume all cached
-    let cachedRole = 'N/A';
-
-    for (let i = 0; i < allDays.length; i++) {
-        const dayKey = `${host}:${publisherName}:${allDays[i]}`;
-        const cached = dayStatsCache.get(dayKey);
-        if (cached && Date.now() - cached.cachedAt < DAY_CACHE_TTL_MS) {
-            cachedItems.push(cached.item);
-            cachedRole = cached.role;
-        } else {
-            fetchFromIdx = i;
-            break;
-        }
-    }
-
-    if (fetchFromIdx === allDays.length) {
-        console.log(`[Day Cache] Full HIT for ${publisherName} ${dateFrom}→${dateTo}`);
-        return NextResponse.json({ data: { result: cachedItems }, role: cachedRole });
-    }
-
-    const fetchFrom = allDays[fetchFromIdx];
-    const fetchTo = dateTo;
-    if (fetchFromIdx > 0) {
-        console.log(`[Day Cache] Partial HIT: ${cachedItems.length} days cached, fetching ${fetchFrom}→${fetchTo}`);
-    }
 
     const PUBLISHERS = {
         Adsterra: {
@@ -587,42 +521,42 @@ export async function GET(request: Request) {
     const [platformStats, blastStats, topsStats, blastZoneStats]: any[] = await Promise.all([
         (async () => {
             if (publisherName === 'Adsterra' && 'apiToken' in pubConfig && pubConfig.apiToken) {
-                return fetchAdsterraStats(pubConfig.apiToken as string, fetchFrom, fetchTo);
+                return fetchAdsterraStats(pubConfig.apiToken as string, dateFrom, dateTo);
             }
             if (publisherName === 'TrafficStars' && 'refreshToken' in pubConfig && pubConfig.refreshToken) {
                 const tsToken = await getTrafficStarsSessionToken(pubConfig.refreshToken as string);
                 if (tsToken) {
-                    return fetchTrafficStarsAdvertiserStats(tsToken, fetchFrom, fetchTo);
+                    return fetchTrafficStarsAdvertiserStats(tsToken, dateFrom, dateTo);
                 }
                 return null;
             }
             if (publisherName === 'TrafficShop' && 'apiToken' in pubConfig && pubConfig.apiToken) {
-                return fetchTrafficShopStats(pubConfig.apiToken as string, fetchFrom, fetchTo);
+                return fetchTrafficShopStats(pubConfig.apiToken as string, dateFrom, dateTo);
             }
             if (publisherName === 'Traforama' && 'apiToken' in pubConfig && pubConfig.apiToken && (pubConfig as any).apiEmail) {
-                return fetchTraforamaStats((pubConfig as any).apiEmail, pubConfig.apiToken as string, fetchFrom, fetchTo);
+                return fetchTraforamaStats((pubConfig as any).apiEmail, pubConfig.apiToken as string, dateFrom, dateTo);
             }
             if (publisherName.startsWith('Twinred') && 'clientId' in pubConfig && pubConfig.clientId) {
                 const cacheKey = publisherName.endsWith('Blast') ? 'blast' : 'top';
                 const token = await getTwinredSessionToken(pubConfig.clientId as string, pubConfig.clientSecret as string, cacheKey);
-                return token && pubConfig.advId ? fetchTwinredAdvertiserStats(token, pubConfig.advId as string, fetchFrom, fetchTo) : null;
+                return token && pubConfig.advId ? fetchTwinredAdvertiserStats(token, pubConfig.advId as string, dateFrom, dateTo) : null;
             }
 
             let sessionToken = null;
             if ('apiToken' in pubConfig && pubConfig.apiToken) {
                 sessionToken = await getSessionToken(pubConfig.apiToken as string);
             }
-            return sessionToken ? fetchStats(sessionToken, fetchFrom, fetchTo) : null;
+            return sessionToken ? fetchStats(sessionToken, dateFrom, dateTo) : null;
         })(),
-        fetchBlastStats((pubConfig as any).blastId, fetchFrom, fetchTo),
-        fetchTopsStats((pubConfig as any).topId, fetchFrom, fetchTo),
-        ['TrafficStars', 'Traforama', 'Twinred Blast'].includes(publisherName) ? fetchBlastZoneStats((pubConfig as any).blastId, fetchFrom, fetchTo) : Promise.resolve(null)
+        fetchBlastStats((pubConfig as any).blastId, dateFrom, dateTo),
+        fetchTopsStats((pubConfig as any).topId, dateFrom, dateTo),
+        ['TrafficStars', 'Traforama', 'Twinred Blast'].includes(publisherName) ? fetchBlastZoneStats((pubConfig as any).blastId, dateFrom, dateTo) : Promise.resolve(null)
     ]);
 
-    // Build itemsMap for the FETCH range only (not the full range)
+    // Build itemsMap for the full requested range
     const itemsMap: Record<string, any> = {};
-    let curr = new Date(fetchFrom + 'T00:00:00Z');
-    const end = new Date(fetchTo + 'T00:00:00Z');
+    let curr = new Date(dateFrom + 'T00:00:00Z');
+    const end = new Date(dateTo + 'T00:00:00Z');
     while (curr <= end) {
         const d = curr.toISOString().split('T')[0];
         itemsMap[d] = { ddate: d, impressions: 0, clicks: 0, cost: null, ctr: 0, cpm: 0 };
@@ -649,17 +583,5 @@ export async function GET(request: Request) {
     }));
 
     const role = platformStats?.role || 'N/A';
-
-    // Store newly fetched days in per-day cache (skip days with all-null data)
-    resultItems.forEach((item: any) => {
-        if (isItemCacheable(item, publisherName)) {
-            dayStatsCache.set(`${host}:${publisherName}:${item.ddate}`, { item, role, cachedAt: Date.now() });
-        }
-    });
-
-    // Combine the cached prefix with the newly fetched tail
-    const allItems = [...cachedItems, ...resultItems];
-    console.log(`[Day Cache] Stored ${resultItems.filter((i: any) => isItemCacheable(i, publisherName)).length}/${resultItems.length} new days. Total: ${allItems.length} days`);
-
-    return NextResponse.json({ data: { result: allItems }, role });
+    return NextResponse.json({ data: { result: resultItems }, role });
 }

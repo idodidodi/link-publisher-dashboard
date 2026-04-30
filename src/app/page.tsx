@@ -65,6 +65,55 @@ interface StatsData {
 
 const PUBLISHERS_TABS = ['Adsterra', 'Exoclick', 'Rollerads', 'TrafficShop', 'TrafficStars', 'Traforama', 'Twinred Top', 'Twinred Blast'];
 
+// --- Client-side localStorage cache ---
+const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+
+const PUBLISHER_EXPECTED_FIELDS: Record<string, string[]> = {
+  Adsterra:        ['cost', 'topsRevenue', 'blastRevenue'],
+  Exoclick:        ['cost', 'topsRevenue', 'blastRevenue'],
+  Rollerads:       ['topsRevenue', 'blastRevenue'],
+  TrafficShop:     ['cost', 'topsRevenue', 'blastRevenue'],
+  TrafficStars:    ['cost', 'topsRevenue', 'blastRevenue', 'blastZoneRevenue'],
+  Traforama:       ['cost', 'topsRevenue', 'blastRevenue', 'blastZoneRevenue'],
+  'Twinred Top':   ['cost', 'topsRevenue'],
+  'Twinred Blast': ['cost', 'blastRevenue', 'blastZoneRevenue'],
+};
+
+function getDaysInRange(from: string, to: string): string[] {
+  const days: string[] = [];
+  let c = new Date(from + 'T00:00:00Z');
+  const e = new Date(to + 'T00:00:00Z');
+  while (c <= e) {
+    days.push(c.toISOString().split('T')[0]);
+    c.setUTCDate(c.getUTCDate() + 1);
+  }
+  return days;
+}
+
+function isItemCacheable(item: any, publisher: string): boolean {
+  const expected = PUBLISHER_EXPECTED_FIELDS[publisher] ?? [];
+  return !expected.some(field => item[field] == null);
+}
+
+function getCachedDay(publisher: string, date: string): { item: any; role: string } | null {
+  try {
+    const raw = localStorage.getItem(`stats:${publisher}:${date}`);
+    if (!raw) return null;
+    const { item, role, cachedAt } = JSON.parse(raw);
+    if (Date.now() - cachedAt > CACHE_TTL_MS) {
+      localStorage.removeItem(`stats:${publisher}:${date}`);
+      return null;
+    }
+    return { item, role };
+  } catch { return null; }
+}
+
+function setCachedDay(publisher: string, date: string, item: any, role: string): void {
+  try {
+    localStorage.setItem(`stats:${publisher}:${date}`, JSON.stringify({ item, role, cachedAt: Date.now() }));
+  } catch { /* localStorage full or unavailable */ }
+}
+
 
 export default function Dashboard() {
   const [stats, setStats] = useState<StatsData | null>(null);
@@ -109,10 +158,49 @@ export default function Dashboard() {
       setLoading(true);
       setError(null);
       try {
-        const response = await fetch(`/api/stats?publisher=${activePublisher}&from=${appliedFrom}&to=${appliedTo}`);
+        const allDays = getDaysInRange(appliedFrom, appliedTo);
+        const cachedItems: any[] = [];
+        let fetchFromIdx = allDays.length; // assume all cached
+        let cachedRole = 'N/A';
+
+        // Walk days in order; stop at first cache miss
+        for (let i = 0; i < allDays.length; i++) {
+          const cached = getCachedDay(activePublisher, allDays[i]);
+          if (cached) {
+            cachedItems.push(cached.item);
+            cachedRole = cached.role;
+          } else {
+            fetchFromIdx = i;
+            break;
+          }
+        }
+
+        // Full cache hit — no API call needed
+        if (fetchFromIdx === allDays.length) {
+          console.log(`[Cache] Full HIT for ${activePublisher} ${appliedFrom}→${appliedTo}`);
+          setStats({ data: { result: cachedItems }, role: cachedRole });
+          return;
+        }
+
+        const fetchFrom = allDays[fetchFromIdx];
+        if (fetchFromIdx > 0) {
+          console.log(`[Cache] Partial HIT: ${cachedItems.length} days from cache, fetching ${fetchFrom}→${appliedTo}`);
+        }
+
+        const response = await fetch(`/api/stats?publisher=${activePublisher}&from=${fetchFrom}&to=${appliedTo}`);
         if (!response.ok) throw new Error('Failed to fetch stats');
         const data = await response.json();
-        setStats(data);
+
+        // Cache each new day that has all expected fields
+        const newItems: any[] = data.data?.result || [];
+        newItems.forEach((item: any) => {
+          if (isItemCacheable(item, activePublisher)) {
+            setCachedDay(activePublisher, item.ddate, item, data.role);
+          }
+        });
+
+        // Merge cached prefix with fresh tail
+        setStats({ data: { result: [...cachedItems, ...newItems] }, role: data.role || cachedRole });
       } catch (err: any) {
         setError(err.message);
       } finally {
