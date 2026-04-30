@@ -117,12 +117,12 @@ function getDaysInRange(from: string, to: string): string[] {
 
 // Fields expected to be non-null for a day to be considered complete, per publisher
 const PUBLISHER_EXPECTED_FIELDS: Record<string, string[]> = {
-    Adsterra:      ['cost', 'topsRevenue', 'blastRevenue'],
-    Exoclick:      ['cost', 'topsRevenue', 'blastRevenue'],
-    Rollerads:     ['topsRevenue', 'blastRevenue'],
-    TrafficShop:   ['cost', 'topsRevenue', 'blastRevenue'],
-    TrafficStars:  ['cost', 'topsRevenue', 'blastRevenue', 'blastZoneRevenue'],
-    Traforama:     ['topsRevenue', 'blastRevenue', 'blastZoneRevenue'],
+    Adsterra: ['cost', 'topsRevenue', 'blastRevenue'],
+    Exoclick: ['cost', 'topsRevenue', 'blastRevenue'],
+    Rollerads: ['topsRevenue', 'blastRevenue'],
+    TrafficShop: ['cost', 'topsRevenue', 'blastRevenue'],
+    TrafficStars: ['cost', 'topsRevenue', 'blastRevenue', 'blastZoneRevenue'],
+    Traforama: ['cost', 'topsRevenue', 'blastRevenue', 'blastZoneRevenue'],
     'Twinred Top': ['cost', 'topsRevenue'],
     'Twinred Blast': ['cost', 'blastRevenue', 'blastZoneRevenue'],
 };
@@ -241,6 +241,61 @@ async function fetchTrafficShopStats(apiToken: string, dateFrom: string, dateTo:
         return { data: { result }, role: 'Advertiser' };
     } catch (err) {
         console.error('Error fetching TrafficShop stats:', err);
+        return null;
+    }
+}
+
+async function fetchTraforamaStats(apiEmail: string, apiToken: string, dateFrom: string, dateTo: string) {
+    // Traforama uses dd.mm.yyyy date format with " - " separator (URL-encoded as +-+)
+    const toTraforamaDate = (iso: string) => {
+        const [y, m, d] = iso.split('-');
+        return `${d}.${m}.${y}`;
+    };
+    const period = `${toTraforamaDate(dateFrom)}+-+${toTraforamaDate(dateTo)}`;
+    const url = `https://api.traforama.com/api/report?period=${period}&group_by=date`;
+
+    try {
+        const response = await fetch(url, {
+            method: 'GET',
+            headers: {
+                'X-ASG-AUTH-EMAIL': apiEmail,
+                'X-ASG-AUTH-TOKEN': apiToken,
+                'Accept': 'application/json'
+            }
+        });
+
+        if (!response.ok) {
+            console.error('Traforama API failed:', response.status, await response.text());
+            return null;
+        }
+
+        const data = await response.json();
+        // Response is an array of daily records; publisher cost is in broker_income
+        // The date is in the "name" field (yyyy-mm-dd when group_by=date)
+        const items: any[] = Array.isArray(data) ? data : (data.result || data.data || []);
+        const result = items.map((item: any) => {
+            // "name" holds the grouped value (yyyy-mm-dd for group_by=date)
+            const rawDate: string = item.name || item.date || item.ddate || '';
+            let ddate = rawDate;
+            // If it's dd.mm.yyyy format, convert to yyyy-mm-dd
+            if (/^\d{2}\.\d{2}\.\d{4}$/.test(rawDate)) {
+                const parts = rawDate.split('.');
+                ddate = `${parts[2]}-${parts[1]}-${parts[0]}`;
+            }
+            return {
+                ddate,
+                impressions: parseInt(item.impressions) || 0,
+                clicks: parseInt(item.clicks) || 0,
+                cost: parseFloat(item.broker_income) || 0,
+                ctr: parseFloat(item.broker_ctr) || 0,
+                cpm: parseFloat(item.broker_cpm) || 0
+            };
+        });
+
+        console.log(`Traforama API: ${result.length} days fetched`);
+        return { data: { result }, role: 'Advertiser' };
+    } catch (err) {
+        console.error('Error fetching Traforama stats:', err);
         return null;
     }
 }
@@ -502,8 +557,9 @@ export async function GET(request: Request) {
         },
         Traforama: {
             topId: process.env.TRAFORAMA_ADSPYGLASS_TOP_PUBLISHER_ID,
-            blastId: process.env.TRAFORAMA_BLAST_PUBLISHER_ID,
-            // apiToken: process.env.TRAFORAMA_API_TOKEN
+            blastId: process.env.TRAFORAMA_ADSPYGLASS_BLAST_PUBLISHER_ID,
+            apiToken: process.env.TRAFORAMA_API_TOKEN,
+            apiEmail: process.env.TRAFORAMA_API_EMAIL,
         },
         'Twinred Top': {
             topId: process.env.TWINRED_TOP_PUBLISHER_ID,
@@ -542,6 +598,9 @@ export async function GET(request: Request) {
             }
             if (publisherName === 'TrafficShop' && 'apiToken' in pubConfig && pubConfig.apiToken) {
                 return fetchTrafficShopStats(pubConfig.apiToken as string, fetchFrom, fetchTo);
+            }
+            if (publisherName === 'Traforama' && 'apiToken' in pubConfig && pubConfig.apiToken && (pubConfig as any).apiEmail) {
+                return fetchTraforamaStats((pubConfig as any).apiEmail, pubConfig.apiToken as string, fetchFrom, fetchTo);
             }
             if (publisherName.startsWith('Twinred') && 'clientId' in pubConfig && pubConfig.clientId) {
                 const cacheKey = publisherName.endsWith('Blast') ? 'blast' : 'top';
