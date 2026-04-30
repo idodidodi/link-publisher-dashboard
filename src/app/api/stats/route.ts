@@ -101,8 +101,44 @@ let cachedTrafficStarsToken: { token: string, expiresAt: number } | null = null;
 let cachedTwinredBlastToken: { token: string, expiresAt: number } | null = null;
 let cachedTwinredTopToken: { token: string, expiresAt: number } | null = null;
 
-const statsCache = new Map<string, { data: any, expiresAt: number }>();
-const STATS_CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+const dayStatsCache = new Map<string, { item: any, role: string, cachedAt: number }>();
+const DAY_CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+
+function getDaysInRange(from: string, to: string): string[] {
+    const days: string[] = [];
+    let c = new Date(from + 'T00:00:00Z');
+    const e = new Date(to + 'T00:00:00Z');
+    while (c <= e) {
+        days.push(c.toISOString().split('T')[0]);
+        c.setUTCDate(c.getUTCDate() + 1);
+    }
+    return days;
+}
+
+// Fields expected to be non-null for a day to be considered complete, per publisher
+const PUBLISHER_EXPECTED_FIELDS: Record<string, string[]> = {
+    Adsterra:      ['cost', 'topsRevenue', 'blastRevenue'],
+    Exoclick:      ['cost', 'topsRevenue', 'blastRevenue'],
+    Rollerads:     ['topsRevenue', 'blastRevenue'],
+    TrafficShop:   ['cost', 'topsRevenue', 'blastRevenue'],
+    TrafficStars:  ['cost', 'topsRevenue', 'blastRevenue', 'blastZoneRevenue'],
+    Traforama:     ['topsRevenue', 'blastRevenue', 'blastZoneRevenue'],
+    'Twinred Top': ['cost', 'topsRevenue'],
+    'Twinred Blast': ['cost', 'blastRevenue', 'blastZoneRevenue'],
+};
+
+function isItemCacheable(item: any, publisherName: string): boolean {
+    const expectedFields = PUBLISHER_EXPECTED_FIELDS[publisherName] ?? [];
+    const nullExpectedFields = Object.entries(item)
+        .filter(([field, value]) => value == null && expectedFields.includes(field))
+        .map(([field]) => field);
+
+    if (nullExpectedFields.length > 0) {
+        console.log(`[Day Cache] NOT cacheable ${publisherName} ${item.ddate}: missing expected fields: ${nullExpectedFields.join(', ')}`);
+        return false;
+    }
+    return true;
+}
 
 async function getTrafficStarsSessionToken(refreshToken: string) {
     if (cachedTrafficStarsToken && Date.now() < cachedTrafficStarsToken.expiresAt) {
@@ -398,18 +434,44 @@ export async function GET(request: Request) {
     const publisherName = searchParams.get('publisher') || 'Exoclick';
 
     const now = new Date();
-    const defaultDateTo = now.toISOString().split('T')[0];
-    const dateFromDate = new Date();
-    dateFromDate.setDate(now.getDate() - 14);
+    const yesterday = new Date(now);
+    yesterday.setDate(now.getDate() - 1);
+    const defaultDateTo = yesterday.toISOString().split('T')[0];
+    const dateFromDate = new Date(yesterday);
+    dateFromDate.setDate(yesterday.getDate() - 14);
     const defaultDateFrom = dateFromDate.toISOString().split('T')[0];
     const dateFrom = from || defaultDateFrom;
     const dateTo = to || defaultDateTo;
 
-    const cacheKey = `${publisherName}:${dateFrom}:${dateTo}`;
-    const cachedEntry = statsCache.get(cacheKey);
-    if (cachedEntry && Date.now() < cachedEntry.expiresAt) {
-        console.log(`[Stats Cache] HIT for ${cacheKey}`);
-        return NextResponse.json(cachedEntry.data);
+    const host = new URL(request.url).host;
+
+    // --- Day-level smart cache ---
+    const allDays = getDaysInRange(dateFrom, dateTo);
+    const cachedItems: any[] = [];
+    let fetchFromIdx = allDays.length; // assume all cached
+    let cachedRole = 'N/A';
+
+    for (let i = 0; i < allDays.length; i++) {
+        const dayKey = `${host}:${publisherName}:${allDays[i]}`;
+        const cached = dayStatsCache.get(dayKey);
+        if (cached && Date.now() - cached.cachedAt < DAY_CACHE_TTL_MS) {
+            cachedItems.push(cached.item);
+            cachedRole = cached.role;
+        } else {
+            fetchFromIdx = i;
+            break;
+        }
+    }
+
+    if (fetchFromIdx === allDays.length) {
+        console.log(`[Day Cache] Full HIT for ${publisherName} ${dateFrom}→${dateTo}`);
+        return NextResponse.json({ data: { result: cachedItems }, role: cachedRole });
+    }
+
+    const fetchFrom = allDays[fetchFromIdx];
+    const fetchTo = dateTo;
+    if (fetchFromIdx > 0) {
+        console.log(`[Day Cache] Partial HIT: ${cachedItems.length} days cached, fetching ${fetchFrom}→${fetchTo}`);
     }
 
     const PUBLISHERS = {
@@ -469,50 +531,43 @@ export async function GET(request: Request) {
     const [platformStats, blastStats, topsStats, blastZoneStats]: any[] = await Promise.all([
         (async () => {
             if (publisherName === 'Adsterra' && 'apiToken' in pubConfig && pubConfig.apiToken) {
-                return fetchAdsterraStats(pubConfig.apiToken as string, dateFrom, dateTo);
+                return fetchAdsterraStats(pubConfig.apiToken as string, fetchFrom, fetchTo);
             }
             if (publisherName === 'TrafficStars' && 'refreshToken' in pubConfig && pubConfig.refreshToken) {
                 const tsToken = await getTrafficStarsSessionToken(pubConfig.refreshToken as string);
                 if (tsToken) {
-                    return fetchTrafficStarsAdvertiserStats(tsToken, dateFrom, dateTo);
+                    return fetchTrafficStarsAdvertiserStats(tsToken, fetchFrom, fetchTo);
                 }
                 return null;
             }
             if (publisherName === 'TrafficShop' && 'apiToken' in pubConfig && pubConfig.apiToken) {
-                return fetchTrafficShopStats(pubConfig.apiToken as string, dateFrom, dateTo);
+                return fetchTrafficShopStats(pubConfig.apiToken as string, fetchFrom, fetchTo);
             }
             if (publisherName.startsWith('Twinred') && 'clientId' in pubConfig && pubConfig.clientId) {
                 const cacheKey = publisherName.endsWith('Blast') ? 'blast' : 'top';
                 const token = await getTwinredSessionToken(pubConfig.clientId as string, pubConfig.clientSecret as string, cacheKey);
-                return token && pubConfig.advId ? fetchTwinredAdvertiserStats(token, pubConfig.advId as string, dateFrom, dateTo) : null;
+                return token && pubConfig.advId ? fetchTwinredAdvertiserStats(token, pubConfig.advId as string, fetchFrom, fetchTo) : null;
             }
 
             let sessionToken = null;
             if ('apiToken' in pubConfig && pubConfig.apiToken) {
                 sessionToken = await getSessionToken(pubConfig.apiToken as string);
             }
-            return sessionToken ? fetchStats(sessionToken, dateFrom, dateTo) : null;
+            return sessionToken ? fetchStats(sessionToken, fetchFrom, fetchTo) : null;
         })(),
-        fetchBlastStats((pubConfig as any).blastId, dateFrom, dateTo),
-        fetchTopsStats((pubConfig as any).topId, dateFrom, dateTo),
-        ['TrafficStars', 'Traforama', 'Twinred Blast'].includes(publisherName) ? fetchBlastZoneStats((pubConfig as any).blastId, dateFrom, dateTo) : Promise.resolve(null)
+        fetchBlastStats((pubConfig as any).blastId, fetchFrom, fetchTo),
+        fetchTopsStats((pubConfig as any).topId, fetchFrom, fetchTo),
+        ['TrafficStars', 'Traforama', 'Twinred Blast'].includes(publisherName) ? fetchBlastZoneStats((pubConfig as any).blastId, fetchFrom, fetchTo) : Promise.resolve(null)
     ]);
 
-    // Create a base map with all dates in the range
+    // Build itemsMap for the FETCH range only (not the full range)
     const itemsMap: Record<string, any> = {};
-    let curr = new Date(dateFrom);
-    const end = new Date(dateTo);
+    let curr = new Date(fetchFrom + 'T00:00:00Z');
+    const end = new Date(fetchTo + 'T00:00:00Z');
     while (curr <= end) {
         const d = curr.toISOString().split('T')[0];
-        itemsMap[d] = {
-            ddate: d,
-            impressions: 0,
-            clicks: 0,
-            cost: null,
-            ctr: 0,
-            cpm: 0
-        };
-        curr.setDate(curr.getDate() + 1);
+        itemsMap[d] = { ddate: d, impressions: 0, clicks: 0, cost: null, ctr: 0, cpm: 0 };
+        curr.setUTCDate(curr.getUTCDate() + 1);
     }
 
     const platformResult = (platformStats as any)?.data?.result || [];
@@ -534,13 +589,18 @@ export async function GET(request: Request) {
         topsRevenue: topsStats && topsStats[item.ddate] !== undefined ? topsStats[item.ddate] : null
     }));
 
-    const responseData = {
-        data: { result: resultItems },
-        role: platformStats?.role || 'N/A'
-    };
+    const role = platformStats?.role || 'N/A';
 
-    statsCache.set(cacheKey, { data: responseData, expiresAt: Date.now() + STATS_CACHE_TTL_MS });
-    console.log(`[Stats Cache] MISS — cached ${cacheKey}`);
+    // Store newly fetched days in per-day cache (skip days with all-null data)
+    resultItems.forEach((item: any) => {
+        if (isItemCacheable(item, publisherName)) {
+            dayStatsCache.set(`${host}:${publisherName}:${item.ddate}`, { item, role, cachedAt: Date.now() });
+        }
+    });
 
-    return NextResponse.json(responseData);
+    // Combine the cached prefix with the newly fetched tail
+    const allItems = [...cachedItems, ...resultItems];
+    console.log(`[Day Cache] Stored ${resultItems.filter((i: any) => isItemCacheable(i, publisherName)).length}/${resultItems.length} new days. Total: ${allItems.length} days`);
+
+    return NextResponse.json({ data: { result: allItems }, role });
 }

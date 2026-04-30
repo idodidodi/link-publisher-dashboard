@@ -86,11 +86,13 @@ export default function Dashboard() {
   // Applied dates (used for fetching)
   const [appliedFrom, setAppliedFrom] = useState(() => {
     const d = new Date();
-    d.setDate(d.getDate() - 14);
+    d.setDate(d.getDate() - 15); // yesterday - 14 days
     return d.toISOString().split('T')[0];
   });
   const [appliedTo, setAppliedTo] = useState(() => {
-    return new Date().toISOString().split('T')[0];
+    const d = new Date();
+    d.setDate(d.getDate() - 1); // yesterday
+    return d.toISOString().split('T')[0];
   });
 
   // Modal & Selection States
@@ -132,6 +134,39 @@ export default function Dashboard() {
     setAppliedFrom(pendingFrom);
     setAppliedTo(pendingTo);
     setIsModalOpen(false);
+  };
+
+  const applyShortcut = (from: string, to: string) => {
+    setValidationError(null);
+    setAppliedFrom(from);
+    setAppliedTo(to);
+    setIsModalOpen(false);
+  };
+
+  const getShortcuts = () => {
+    const fmt = (d: Date) => d.toISOString().split('T')[0];
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const yesterday = new Date(today); yesterday.setDate(today.getDate() - 1);
+    const d = (n: number) => { const x = new Date(yesterday); x.setDate(yesterday.getDate() - n + 1); return x; };
+    const monthStart = (offset = 0) => {
+      const x = new Date(today.getFullYear(), today.getMonth() - offset, 1);
+      return x;
+    };
+    const monthEnd = (offset = 0) => {
+      const x = new Date(today.getFullYear(), today.getMonth() - offset + 1, 0);
+      return x;
+    };
+    return [
+      { label: 'Yesterday',      from: fmt(yesterday),     to: fmt(yesterday) },
+      { label: 'Last 2 Days',    from: fmt(d(2)),           to: fmt(yesterday) },
+      { label: 'Last 7 Days',    from: fmt(d(7)),           to: fmt(yesterday) },
+      { label: 'Last 14 Days',   from: fmt(d(14)),          to: fmt(yesterday) },
+      { label: 'Last 30 Days',   from: fmt(d(30)),          to: fmt(yesterday) },
+      { label: 'Last 90 Days',   from: fmt(d(90)),          to: fmt(yesterday) },
+      { label: 'Current Month',  from: fmt(monthStart(0)),  to: fmt(yesterday) },
+      { label: 'Previous Month', from: fmt(monthStart(1)),  to: fmt(monthEnd(1)) },
+    ];
   };
 
   const openModal = () => {
@@ -413,13 +448,37 @@ export default function Dashboard() {
                 justifyContent: 'space-between',
                 alignItems: 'center'
               }}>
-                <h3 style={{ margin: 0, fontSize: '1.1rem' }}>Select Custom Dates</h3>
-                <button
+                <h3 style={{ margin: 0, fontSize: '1.1rem' }}>Select Date Range</h3>
+                 <button
                   onClick={() => setIsModalOpen(false)}
                   style={{ background: 'transparent', border: 'none', color: 'var(--text-dim)', cursor: 'pointer', padding: '4px' }}
                 >
                   <X size={20} />
                 </button>
+              </div>
+
+              {/* Shortcuts */}
+              <div style={{ padding: '1rem 1.5rem 0', display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+                {getShortcuts().map(s => (
+                  <button
+                    key={s.label}
+                    onClick={() => applyShortcut(s.from, s.to)}
+                    style={{
+                      padding: '0.35rem 0.75rem',
+                      borderRadius: '999px',
+                      border: '1px solid rgba(255,255,255,0.15)',
+                      background: appliedFrom === s.from && appliedTo === s.to ? 'var(--accent)' : 'rgba(255,255,255,0.05)',
+                      color: 'white',
+                      fontSize: '0.78rem',
+                      fontWeight: 500,
+                      cursor: 'pointer',
+                      transition: 'all 0.15s ease',
+                      whiteSpace: 'nowrap'
+                    }}
+                  >
+                    {s.label}
+                  </button>
+                ))}
               </div>
 
               <div style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
