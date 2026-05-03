@@ -263,6 +263,46 @@ async function fetchTraforamaStats(apiEmail: string, apiToken: string, dateFrom:
     }
 }
 
+async function fetchHilltopAdsStats(apiKey: string, dateFrom: string, dateTo: string) {
+    const url = `https://api.hilltopads.com/advertiser/listStats?key=${apiKey}&date=${dateFrom}&date2=${dateTo}&group=date`;
+    
+    let attempts = 0;
+    while (attempts < 10) {
+        try {
+            const response = await fetch(url);
+            if (response.status === 200) {
+                const data = await response.json();
+                if (data.status === 'success' && data.result) {
+                    const result = Object.entries(data.result).map(([date, items]: [string, any]) => {
+                        const item = Array.isArray(items) ? items[0] : items;
+                        return {
+                            ddate: date,
+                            impressions: item?.impressions || 0,
+                            clicks: item?.clicks || 0,
+                            cost: parseFloat(item?.revenue) || 0,
+                            ctr: (item?.clicks && item?.impressions) ? (item.clicks / item.impressions) * 100 : 0,
+                            cpm: parseFloat(item?.cpm) || 0
+                        };
+                    });
+                    return { data: { result }, role: 'Advertiser' };
+                }
+                return null;
+            } else if (response.status === 250 || response.status === 251) {
+                // wait 3 seconds and retry
+                await new Promise(r => setTimeout(r, 3000));
+                attempts++;
+            } else {
+                console.error('HilltopAds API failed:', response.status);
+                return null;
+            }
+        } catch (err) {
+            console.error('Error fetching HilltopAds stats:', err);
+            return null;
+        }
+    }
+    return null;
+}
+
 function decodeB64(encoded: string | undefined): string | undefined {
     if (!encoded) return undefined;
     return Buffer.from(encoded, 'base64').toString('utf-8');
@@ -479,6 +519,10 @@ export async function GET(request: Request) {
             blastId: process.env.ROLLERADS_BLAST_PUBLISHER_ID,
             // apiToken: process.env.ROLLERADS_API_TOKEN
         },
+        HilltopAds: {
+            blastId: process.env.HILLTOPADS_BLAST_PUBLISHER_ID,
+            apiToken: process.env.HILLTOPADS_API_TOKEN
+        },
         TrafficShop: {
             topId: process.env.TRAFFICSHOP_TOP_PUBLISHER_ID,
             blastId: process.env.TRAFFICSHOP_BLAST_PUBLISHER_ID,
@@ -522,6 +566,9 @@ export async function GET(request: Request) {
         (async () => {
             if (publisherName === 'Adsterra' && 'apiToken' in pubConfig && pubConfig.apiToken) {
                 return fetchAdsterraStats(pubConfig.apiToken as string, dateFrom, dateTo);
+            }
+            if (publisherName === 'HilltopAds' && 'apiToken' in pubConfig && pubConfig.apiToken) {
+                return fetchHilltopAdsStats(pubConfig.apiToken as string, dateFrom, dateTo);
             }
             if (publisherName === 'TrafficStars' && 'refreshToken' in pubConfig && pubConfig.refreshToken) {
                 const tsToken = await getTrafficStarsSessionToken(pubConfig.refreshToken as string);

@@ -63,7 +63,7 @@ interface StatsData {
   role: string | null;
 }
 
-const PUBLISHERS_TABS = ['Adsterra', 'Exoclick', 'Rollerads', 'TrafficShop', 'TrafficStars', 'Traforama', 'Twinred Top', 'Twinred Blast'];
+const PUBLISHERS_TABS = ['Adsterra', 'Exoclick', 'HilltopAds', 'Rollerads', 'TrafficShop', 'TrafficStars', 'Traforama', 'Twinred Top', 'Twinred Blast'];
 
 // --- Client-side localStorage cache ---
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
@@ -71,6 +71,7 @@ const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 const PUBLISHER_EXPECTED_FIELDS: Record<string, string[]> = {
   Adsterra:        ['cost', 'topsRevenue', 'blastRevenue'],
   Exoclick:        ['cost', 'topsRevenue', 'blastRevenue'],
+  HilltopAds:      ['cost', 'blastRevenue'],
   Rollerads:       ['topsRevenue', 'blastRevenue'],
   TrafficShop:     ['cost', 'topsRevenue', 'blastRevenue'],
   TrafficStars:    ['cost', 'topsRevenue', 'blastRevenue', 'blastZoneRevenue'],
@@ -379,7 +380,7 @@ export default function Dashboard() {
   const tableResult = [...enhancedResult].sort((a, b) => b.ddate.localeCompare(a.ddate));
 
   const showBlastDisp = ['TrafficStars', 'Traforama', 'Twinred Blast'].includes(activePublisher);
-  const showTopsRev = activePublisher !== 'Twinred Blast';
+  const showTopsRev = activePublisher !== 'Twinred Blast' && activePublisher !== 'HilltopAds';
   const showBlastRev = activePublisher !== 'Twinred Top';
 
   // Chart Data (use 0 for nulls in the chart so it draws a continuous line instead of breaking)
