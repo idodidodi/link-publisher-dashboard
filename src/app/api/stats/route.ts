@@ -97,6 +97,44 @@ async function fetchAdsterraStats(apiKey: string, dateFrom: string, dateTo: stri
     }
 }
 
+async function fetchRollerAdsStats(apiKey: string, dateFrom: string, dateTo: string) {
+    const val = `bw|${dateFrom} 00:00:00;${dateTo} 23:59:59`;
+    const params = new URLSearchParams();
+    params.append('group', 'day');
+    params.append('filters[ts]', val);
+    
+    const url = `https://api.rollerads.com/statistics/adv?${params.toString()}`;
+    try {
+        const response = await fetch(url, {
+            headers: {
+                'X-ACCESS-TOKEN': apiKey,
+                'Accept': 'application/json'
+            }
+        });
+
+        if (!response.ok) {
+            console.error('RollerAds API failed:', response.status);
+            return null;
+        }
+        const data = await response.json();
+        const rows = data?.response?.rows || [];
+        const result = rows.map((item: any) => ({
+            ddate: item.ts_title,
+            impressions: parseInt(item.cnt_impression) || 0,
+            clicks: parseInt(item.cnt_click) || 0,
+            cost: parseFloat(item.amt_imoney) || 0,
+            ctr: parseFloat(item.ctr) || 0,
+            cpm: parseFloat(item.cpm) || 0
+        }));
+
+        return { data: { result }, role: 'Advertiser' };
+    } catch (err) {
+        console.error('Error in fetchRollerAdsStats:', err);
+        return null;
+    }
+}
+
+
 let cachedTrafficStarsToken: { token: string, expiresAt: number } | null = null;
 let cachedTwinredBlastToken: { token: string, expiresAt: number } | null = null;
 let cachedTwinredTopToken: { token: string, expiresAt: number } | null = null;
@@ -517,7 +555,7 @@ export async function GET(request: Request) {
         Rollerads: {
             topId: process.env.ROLLERADS_TOP_PUBLISHER_ID,
             blastId: process.env.ROLLERADS_BLAST_PUBLISHER_ID,
-            // apiToken: process.env.ROLLERADS_API_TOKEN
+            apiToken: process.env.ROLLERADS_API_TOKEN
         },
         HilltopAds: {
             blastId: process.env.HILLTOPADS_BLAST_PUBLISHER_ID,
@@ -569,6 +607,9 @@ export async function GET(request: Request) {
             }
             if (publisherName === 'HilltopAds' && 'apiToken' in pubConfig && pubConfig.apiToken) {
                 return fetchHilltopAdsStats(pubConfig.apiToken as string, dateFrom, dateTo);
+            }
+            if (publisherName === 'Rollerads' && 'apiToken' in pubConfig && pubConfig.apiToken) {
+                return fetchRollerAdsStats(pubConfig.apiToken as string, dateFrom, dateTo);
             }
             if (publisherName === 'TrafficStars' && 'refreshToken' in pubConfig && pubConfig.refreshToken) {
                 const tsToken = await getTrafficStarsSessionToken(pubConfig.refreshToken as string);
