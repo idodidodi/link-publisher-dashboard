@@ -116,12 +116,7 @@ function setCachedDay(publisher: string, date: string, item: any, role: string):
 }
 
 
-export default function Dashboard() {
-  const [stats, setStats] = useState<StatsData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  // Drag to scroll state
+function useDraggableScroll() {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [startX, setStartX] = useState(0);
@@ -157,6 +152,18 @@ export default function Dashboard() {
       window.removeEventListener('mouseup', handleMouseUp);
     };
   }, [isDragging, startX, scrollLeft]);
+
+  return { scrollContainerRef, isDragging, handleMouseDown };
+}
+
+export default function Dashboard() {
+  const [stats, setStats] = useState<StatsData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const tableScroll = useDraggableScroll();
+  const sidebarScroll = useDraggableScroll();
+
   const [activePublisher, setActivePublisher] = useState(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('activePublisher');
@@ -168,6 +175,14 @@ export default function Dashboard() {
   useEffect(() => {
     if (typeof window !== 'undefined') {
       localStorage.setItem('activePublisher', activePublisher);
+    }
+  }, [activePublisher]);
+
+  const activeTabRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (activeTabRef.current) {
+      activeTabRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
     }
   }, [activePublisher]);
 
@@ -469,24 +484,24 @@ export default function Dashboard() {
   };
 
   return (
-    <div style={{ display: 'flex', minHeight: '100vh', flexDirection: 'row' }}>
+    <div className="layout-container">
       {/* Sidebar for tabs */}
-      <div style={{
-        width: '240px',
-        flexShrink: 0,
-        borderRight: '1px solid var(--card-border)',
-        background: 'rgba(255, 255, 255, 0.02)',
-        padding: '1.5rem',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '0.5rem'
-      }}>
+      <div 
+        className="sidebar"
+        ref={sidebarScroll.scrollContainerRef}
+        onMouseDown={sidebarScroll.handleMouseDown}
+        style={{
+          cursor: sidebarScroll.isDragging ? 'grabbing' : 'auto',
+          userSelect: sidebarScroll.isDragging ? 'none' : 'auto'
+        }}
+      >
         <h3 style={{ marginBottom: '1rem', color: 'var(--text-dim)', fontSize: '0.9rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
           Publishers
         </h3>
         {PUBLISHERS_TABS.map((pub) => (
           <button
             key={pub}
+            ref={activePublisher === pub ? activeTabRef : null}
             onClick={() => setActivePublisher(pub)}
             style={{
               padding: '0.75rem 1rem',
@@ -755,13 +770,13 @@ export default function Dashboard() {
             Daily Performance Breakdown ({appliedFrom} — {appliedTo})
           </h2>
           <div 
-            ref={scrollContainerRef}
-            onMouseDown={handleMouseDown}
+            ref={tableScroll.scrollContainerRef}
+            onMouseDown={tableScroll.handleMouseDown}
             style={{ 
               overflowX: 'auto', 
               WebkitOverflowScrolling: 'touch',
-              cursor: isDragging ? 'grabbing' : 'grab',
-              userSelect: isDragging ? 'none' : 'auto'
+              cursor: tableScroll.isDragging ? 'grabbing' : 'grab',
+              userSelect: tableScroll.isDragging ? 'none' : 'auto'
             }}
           >
             <table style={{ minWidth: '1020px' }}>
