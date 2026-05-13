@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -120,6 +120,43 @@ export default function Dashboard() {
   const [stats, setStats] = useState<StatsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Drag to scroll state
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const [startX, setStartX] = useState(0);
+  const [scrollLeft, setScrollLeft] = useState(0);
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if (!scrollContainerRef.current) return;
+    setIsDragging(true);
+    setStartX(e.pageX - scrollContainerRef.current.offsetLeft);
+    setScrollLeft(scrollContainerRef.current.scrollLeft);
+  };
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isDragging || !scrollContainerRef.current) return;
+      e.preventDefault();
+      const x = e.pageX - scrollContainerRef.current.offsetLeft;
+      const walk = (x - startX) * 2; // scroll-fast multiplier
+      scrollContainerRef.current.scrollLeft = scrollLeft - walk;
+    };
+
+    const handleMouseUp = () => {
+      setIsDragging(false);
+    };
+
+    if (isDragging) {
+      window.addEventListener('mousemove', handleMouseMove);
+      window.addEventListener('mouseup', handleMouseUp);
+    }
+
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isDragging, startX, scrollLeft]);
   const [activePublisher, setActivePublisher] = useState(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('activePublisher');
@@ -436,6 +473,7 @@ export default function Dashboard() {
       {/* Sidebar for tabs */}
       <div style={{
         width: '240px',
+        flexShrink: 0,
         borderRight: '1px solid var(--card-border)',
         background: 'rgba(255, 255, 255, 0.02)',
         padding: '1.5rem',
@@ -472,7 +510,7 @@ export default function Dashboard() {
       </div>
 
       {/* Main Content */}
-      <div className="dashboard-container" style={{ flex: 1 }}>
+      <div className="dashboard-container" style={{ flex: 1, minWidth: 0 }}>
         <header className="header" style={{ marginBottom: '2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div style={{ flex: 1 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
@@ -716,8 +754,17 @@ export default function Dashboard() {
           <h2 style={{ fontSize: '1.25rem', marginBottom: '1rem' }}>
             Daily Performance Breakdown ({appliedFrom} — {appliedTo})
           </h2>
-          <div style={{ overflowX: 'auto' }}>
-            <table>
+          <div 
+            ref={scrollContainerRef}
+            onMouseDown={handleMouseDown}
+            style={{ 
+              overflowX: 'auto', 
+              WebkitOverflowScrolling: 'touch',
+              cursor: isDragging ? 'grabbing' : 'grab',
+              userSelect: isDragging ? 'none' : 'auto'
+            }}
+          >
+            <table style={{ minWidth: '1020px' }}>
               <thead>
                 <tr>
                   <th style={{ textAlign: 'left' }}>Date (A)</th>
