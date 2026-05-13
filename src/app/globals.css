@@ -122,7 +122,6 @@ body {
   border: 1px solid var(--card-border);
   border-radius: 1rem;
   padding: 1.5rem;
-  overflow-x: auto;
 }
 
 table {

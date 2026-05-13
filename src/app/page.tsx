@@ -181,10 +181,15 @@ export default function Dashboard() {
   const activeTabRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
-    if (activeTabRef.current) {
-      activeTabRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+    if (!loading && activeTabRef.current) {
+      // Small timeout ensures the DOM layout is fully painted before scrolling
+      setTimeout(() => {
+        if (activeTabRef.current) {
+          activeTabRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+        }
+      }, 100);
     }
-  }, [activePublisher]);
+  }, [activePublisher, loading]);
 
   // Applied dates (used for fetching)
   const [appliedFrom, setAppliedFrom] = useState(() => {
