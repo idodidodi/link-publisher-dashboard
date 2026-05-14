@@ -122,38 +122,46 @@ function useDraggableScroll() {
   const [startX, setStartX] = useState(0);
   const [scrollLeft, setScrollLeft] = useState(0);
 
-  const handleMouseDown = (e: React.MouseEvent) => {
+  const handlePointerDown = (e: React.PointerEvent) => {
+    // Only use custom drag for mouse. Let touch devices use native momentum scrolling!
+    if (e.pointerType !== 'mouse') return;
+    
     if (!scrollContainerRef.current) return;
     setIsDragging(true);
     setStartX(e.pageX - scrollContainerRef.current.offsetLeft);
     setScrollLeft(scrollContainerRef.current.scrollLeft);
+    scrollContainerRef.current.setPointerCapture(e.pointerId);
   };
 
   useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
+    const handlePointerMove = (e: PointerEvent) => {
       if (!isDragging || !scrollContainerRef.current) return;
-      e.preventDefault();
       const x = e.pageX - scrollContainerRef.current.offsetLeft;
       const walk = (x - startX) * 2; // scroll-fast multiplier
       scrollContainerRef.current.scrollLeft = scrollLeft - walk;
     };
 
-    const handleMouseUp = () => {
+    const handlePointerUp = (e: PointerEvent) => {
       setIsDragging(false);
+      if (scrollContainerRef.current && scrollContainerRef.current.hasPointerCapture(e.pointerId)) {
+        scrollContainerRef.current.releasePointerCapture(e.pointerId);
+      }
     };
 
     if (isDragging) {
-      window.addEventListener('mousemove', handleMouseMove);
-      window.addEventListener('mouseup', handleMouseUp);
+      window.addEventListener('pointermove', handlePointerMove);
+      window.addEventListener('pointerup', handlePointerUp);
+      window.addEventListener('pointercancel', handlePointerUp);
     }
 
     return () => {
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mouseup', handleMouseUp);
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', handlePointerUp);
+      window.removeEventListener('pointercancel', handlePointerUp);
     };
   }, [isDragging, startX, scrollLeft]);
 
-  return { scrollContainerRef, isDragging, handleMouseDown };
+  return { scrollContainerRef, isDragging, handlePointerDown };
 }
 
 export default function Dashboard() {
@@ -494,7 +502,7 @@ export default function Dashboard() {
       <div 
         className="sidebar"
         ref={sidebarScroll.scrollContainerRef}
-        onMouseDown={sidebarScroll.handleMouseDown}
+        onPointerDown={sidebarScroll.handlePointerDown}
         style={{
           cursor: sidebarScroll.isDragging ? 'grabbing' : 'auto',
           userSelect: sidebarScroll.isDragging ? 'none' : 'auto'
@@ -776,7 +784,7 @@ export default function Dashboard() {
           </h2>
           <div 
             ref={tableScroll.scrollContainerRef}
-            onMouseDown={tableScroll.handleMouseDown}
+            onPointerDown={tableScroll.handlePointerDown}
             style={{ 
               overflowX: 'auto', 
               WebkitOverflowScrolling: 'touch',
