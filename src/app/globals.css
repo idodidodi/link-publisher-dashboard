@@ -122,7 +122,6 @@ body {
   border: 1px solid var(--card-border);
   border-radius: 1rem;
   padding: 1.5rem;
-  overflow: hidden;
 }
 
 table {
@@ -221,6 +220,8 @@ tr:hover td {
 
   .table-section {
     padding: 0.75rem;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
   }
 }
 
