@@ -789,7 +789,8 @@ export default function Dashboard() {
               overflowX: 'auto', 
               WebkitOverflowScrolling: 'touch',
               cursor: tableScroll.isDragging ? 'grabbing' : 'grab',
-              userSelect: tableScroll.isDragging ? 'none' : 'auto'
+              userSelect: tableScroll.isDragging ? 'none' : 'auto',
+              touchAction: 'pan-x pan-y'
             }}
           >
             <table style={{ minWidth: '1020px' }}>
