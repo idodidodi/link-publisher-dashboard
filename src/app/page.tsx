@@ -119,47 +119,69 @@ function setCachedDay(publisher: string, date: string, item: any, role: string):
 function useDraggableScroll() {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
-  const [startX, setStartX] = useState(0);
-  const [scrollLeft, setScrollLeft] = useState(0);
+  const pendingRef = useRef<{ startX: number; scrollLeft: number; pointerId: number } | null>(null);
+  const dragDataRef = useRef({ startX: 0, scrollLeft: 0 });
 
   const handlePointerDown = (e: React.PointerEvent) => {
     // Only use custom drag for mouse. Let touch devices use native momentum scrolling!
     if (e.pointerType !== 'mouse') return;
-    
     if (!scrollContainerRef.current) return;
-    setIsDragging(true);
-    setStartX(e.pageX - scrollContainerRef.current.offsetLeft);
-    setScrollLeft(scrollContainerRef.current.scrollLeft);
-    scrollContainerRef.current.setPointerCapture(e.pointerId);
+
+    // Don't start dragging yet — wait until mouse moves past threshold
+    pendingRef.current = {
+      startX: e.pageX,
+      scrollLeft: scrollContainerRef.current.scrollLeft,
+      pointerId: e.pointerId,
+    };
   };
 
   useEffect(() => {
+    const DRAG_THRESHOLD = 5; // pixels of movement before drag activates
+
     const handlePointerMove = (e: PointerEvent) => {
+      // If we have a pending drag, check if threshold is exceeded
+      if (pendingRef.current && !isDragging) {
+        const dx = Math.abs(e.pageX - pendingRef.current.startX);
+        if (dx >= DRAG_THRESHOLD) {
+          // Activate drag
+          dragDataRef.current = {
+            startX: pendingRef.current.startX,
+            scrollLeft: pendingRef.current.scrollLeft,
+          };
+          setIsDragging(true);
+          if (scrollContainerRef.current) {
+            scrollContainerRef.current.setPointerCapture(pendingRef.current.pointerId);
+          }
+          pendingRef.current = null;
+        }
+        return;
+      }
+
       if (!isDragging || !scrollContainerRef.current) return;
-      const x = e.pageX - scrollContainerRef.current.offsetLeft;
-      const walk = (x - startX) * 2; // scroll-fast multiplier
-      scrollContainerRef.current.scrollLeft = scrollLeft - walk;
+      const walk = (e.pageX - dragDataRef.current.startX) * 2;
+      scrollContainerRef.current.scrollLeft = dragDataRef.current.scrollLeft - walk;
     };
 
     const handlePointerUp = (e: PointerEvent) => {
-      setIsDragging(false);
-      if (scrollContainerRef.current && scrollContainerRef.current.hasPointerCapture(e.pointerId)) {
-        scrollContainerRef.current.releasePointerCapture(e.pointerId);
+      pendingRef.current = null;
+      if (isDragging) {
+        setIsDragging(false);
+        if (scrollContainerRef.current && scrollContainerRef.current.hasPointerCapture(e.pointerId)) {
+          scrollContainerRef.current.releasePointerCapture(e.pointerId);
+        }
       }
     };
 
-    if (isDragging) {
-      window.addEventListener('pointermove', handlePointerMove);
-      window.addEventListener('pointerup', handlePointerUp);
-      window.addEventListener('pointercancel', handlePointerUp);
-    }
+    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerup', handlePointerUp);
+    window.addEventListener('pointercancel', handlePointerUp);
 
     return () => {
       window.removeEventListener('pointermove', handlePointerMove);
       window.removeEventListener('pointerup', handlePointerUp);
       window.removeEventListener('pointercancel', handlePointerUp);
     };
-  }, [isDragging, startX, scrollLeft]);
+  }, [isDragging]);
 
   return { scrollContainerRef, isDragging, handlePointerDown };
 }
@@ -783,14 +805,12 @@ export default function Dashboard() {
             Daily Performance Breakdown ({appliedFrom} — {appliedTo})
           </h2>
           <div 
+            className="table-scroll-wrapper"
             ref={tableScroll.scrollContainerRef}
             onPointerDown={tableScroll.handlePointerDown}
-            style={{ 
-              overflowX: 'auto', 
-              WebkitOverflowScrolling: 'touch',
+            style={{
               cursor: tableScroll.isDragging ? 'grabbing' : 'grab',
-              userSelect: tableScroll.isDragging ? 'none' : 'auto',
-              touchAction: 'pan-x pan-y'
+              userSelect: tableScroll.isDragging ? 'none' : 'auto'
             }}
           >
             <table style={{ minWidth: '1020px' }}>
