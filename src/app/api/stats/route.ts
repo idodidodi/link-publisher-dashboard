@@ -523,6 +523,40 @@ async function fetchTopsStats(publisherId: string | undefined, dateFrom: string,
     }
 }
 
+async function fetchTopsZoneStats(publisherId: string | undefined, dateFrom: string, dateTo: string) {
+    const userToken = process.env.TOPS_SOLUTION_MEDIA_API_TOKEN;
+
+    if (!userToken || !publisherId) {
+        return null;
+    }
+
+    const topsZoneUrl = `https://login.topsolutionsmedia.com/admin/api/ZoneReports/publisher=${publisherId}/date?version=6&filters=date:${dateFrom}_${dateTo}&userToken=${userToken}&range=0-40`;
+
+    try {
+        const response = await fetch(topsZoneUrl);
+        if (!response.ok) {
+            console.error('Tops Zone API failed:', response.status);
+            return null;
+        }
+
+        const data = await response.json();
+        const rows = data.response?.list?.rows || {};
+        const results: Record<string, number> = {};
+
+        for (const key in rows) {
+            const row = rows[key];
+            if (row.date) {
+                // Using rtb_rem_cost as the remote feed revenue metric from ZoneReports
+                results[row.date] = parseFloat(row.rtb_rem_cost) || 0;
+            }
+        }
+        return results;
+    } catch (err) {
+        console.error('Error fetching Tops Zone stats:', err);
+        return null;
+    }
+}
+
 export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const from = searchParams.get('from');
@@ -600,7 +634,7 @@ export async function GET(request: Request) {
 
 
 
-    const [platformStats, blastStats, topsStats, blastZoneStats]: any[] = await Promise.all([
+    const [platformStats, blastStats, topsStats, blastZoneStats, topsZoneStats]: any[] = await Promise.all([
         (async () => {
             if (publisherName === 'Adsterra' && 'apiToken' in pubConfig && pubConfig.apiToken) {
                 return fetchAdsterraStats(pubConfig.apiToken as string, dateFrom, dateTo);
@@ -638,7 +672,8 @@ export async function GET(request: Request) {
         })(),
         fetchBlastStats((pubConfig as any).blastId, dateFrom, dateTo),
         fetchTopsStats((pubConfig as any).topId, dateFrom, dateTo),
-        ['TrafficStars', 'Traforama', 'Twinred Blast'].includes(publisherName) ? fetchBlastZoneStats((pubConfig as any).blastId, dateFrom, dateTo) : Promise.resolve(null)
+        ['TrafficStars', 'Traforama', 'Twinred Blast'].includes(publisherName) ? fetchBlastZoneStats((pubConfig as any).blastId, dateFrom, dateTo) : Promise.resolve(null),
+        ['TrafficStars', 'Traforama', 'Twinred Top'].includes(publisherName) ? fetchTopsZoneStats((pubConfig as any).topId, dateFrom, dateTo) : Promise.resolve(null)
     ]);
 
     // Build itemsMap for the full requested range
@@ -667,7 +702,8 @@ export async function GET(request: Request) {
         ...item,
         blastRevenue: blastStats && blastStats[item.ddate] !== undefined ? blastStats[item.ddate] : null,
         blastZoneRevenue: blastZoneStats && blastZoneStats[item.ddate] !== undefined ? blastZoneStats[item.ddate] : null,
-        topsRevenue: topsStats && topsStats[item.ddate] !== undefined ? topsStats[item.ddate] : null
+        topsRevenue: topsStats && topsStats[item.ddate] !== undefined ? topsStats[item.ddate] : null,
+        topsZoneRevenue: topsZoneStats && topsZoneStats[item.ddate] !== undefined ? topsZoneStats[item.ddate] : null
     }));
 
     const role = platformStats?.role || 'N/A';

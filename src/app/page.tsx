@@ -52,6 +52,7 @@ interface StatItem {
   blastRevenue?: number;
   blastZoneRevenue?: number;
   topsRevenue?: number;
+  topsZoneRevenue?: number;
   ctr: number;
   cpm: number;
 }
@@ -397,12 +398,13 @@ export default function Dashboard() {
   const enhancedResult = result.map(item => {
     const publisherCost = item.cost ?? item.revenue ?? item.value ?? null;
     const topsRevenue = item.topsRevenue ?? null;
+    const topsZoneRevenue = item.topsZoneRevenue ?? null;
     const blastRevenue = item.blastRevenue ?? null;
     const blastZoneRevenue = item.blastZoneRevenue ?? null;
 
     let netRevenue: number | null = null;
-    if (topsRevenue !== null || blastRevenue !== null || blastZoneRevenue !== null) {
-      netRevenue = (topsRevenue || 0) + (blastRevenue || 0) + (blastZoneRevenue || 0);
+    if (topsRevenue !== null || topsZoneRevenue !== null || blastRevenue !== null || blastZoneRevenue !== null) {
+      netRevenue = (topsRevenue || 0) + (topsZoneRevenue || 0) + (blastRevenue || 0) + (blastZoneRevenue || 0);
     }
 
     let profit: number | null = null;
@@ -419,6 +421,7 @@ export default function Dashboard() {
       ...item,
       publisherCost,
       topsRevenue,
+      topsZoneRevenue,
       blastRevenue,
       blastZoneRevenue,
       netRevenue,
@@ -432,14 +435,16 @@ export default function Dashboard() {
     ? enhancedResult.reduce((sum, item) => sum + (item.publisherCost || 0), 0) : null;
   const totalTopsRev = enhancedResult.some(i => i.topsRevenue !== null)
     ? enhancedResult.reduce((sum, item) => sum + (item.topsRevenue || 0), 0) : null;
+  const totalTopsZoneRev = enhancedResult.some(i => i.topsZoneRevenue !== null)
+    ? enhancedResult.reduce((sum, item) => sum + (item.topsZoneRevenue || 0), 0) : null;
   const totalBlastRev = enhancedResult.some(i => i.blastRevenue !== null)
     ? enhancedResult.reduce((sum, item) => sum + (item.blastRevenue || 0), 0) : null;
   const totalBlastZoneRev = enhancedResult.some(i => i.blastZoneRevenue !== null)
     ? enhancedResult.reduce((sum, item) => sum + (item.blastZoneRevenue || 0), 0) : null;
 
   let totalNetRev: number | null = null;
-  if (totalTopsRev !== null || totalBlastRev !== null || totalBlastZoneRev !== null) {
-    totalNetRev = (totalTopsRev || 0) + (totalBlastRev || 0) + (totalBlastZoneRev || 0);
+  if (totalTopsRev !== null || totalTopsZoneRev !== null || totalBlastRev !== null || totalBlastZoneRev !== null) {
+    totalNetRev = (totalTopsRev || 0) + (totalTopsZoneRev || 0) + (totalBlastRev || 0) + (totalBlastZoneRev || 0);
   }
 
   let totalProfit: number | null = null;
@@ -469,6 +474,7 @@ export default function Dashboard() {
   const showBlastDisp = ['TrafficStars', 'Traforama', 'Twinred Blast'].includes(activePublisher);
   const showTopsRev = activePublisher !== 'Twinred Blast' && activePublisher !== 'HilltopAds';
   const showBlastRev = activePublisher !== 'Twinred Top';
+  const showTopsDisp = enhancedResult.some(i => i.topsZoneRevenue !== null && i.topsZoneRevenue > 0);
 
   // Chart Data (use 0 for nulls in the chart so it draws a continuous line instead of breaking)
   const chartLabels = enhancedResult.map(item => item.ddate);
@@ -819,6 +825,7 @@ export default function Dashboard() {
                   <th style={{ textAlign: 'left' }}>Date (A)</th>
                   <th>Pub Cost (B)</th>
                   {showTopsRev && <th>Tops Rev (C)</th>}
+                  {showTopsDisp && <th>Tops Disp</th>}
                   {showBlastRev && <th>Blast Rev (D)</th>}
                   {showBlastDisp && <th>Blast Disp (E)</th>}
                   <th>Net Rev (F)</th>
@@ -836,6 +843,11 @@ export default function Dashboard() {
                     {showTopsRev && (
                       <td style={{ color: item.topsRevenue !== null && item.topsRevenue > 0 ? 'inherit' : 'var(--text-dim)' }}>
                         {formatCurrency(item.topsRevenue)}
+                      </td>
+                    )}
+                    {showTopsDisp && (
+                      <td style={{ color: item.topsZoneRevenue !== null && item.topsZoneRevenue > 0 ? 'inherit' : 'var(--text-dim)' }}>
+                        {formatCurrency(item.topsZoneRevenue)}
                       </td>
                     )}
                     {showBlastRev && (
@@ -869,6 +881,11 @@ export default function Dashboard() {
                   {showTopsRev && (
                     <td style={{ fontWeight: 'bold', color: totalTopsRev === null ? 'var(--text-dim)' : 'inherit' }}>
                       {formatCurrency(totalTopsRev)}
+                    </td>
+                  )}
+                  {showTopsDisp && (
+                    <td style={{ fontWeight: 'bold', color: totalTopsZoneRev === null ? 'var(--text-dim)' : 'inherit' }}>
+                      {formatCurrency(totalTopsZoneRev)}
                     </td>
                   )}
                   {showBlastRev && (
